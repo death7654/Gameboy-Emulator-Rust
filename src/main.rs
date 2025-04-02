@@ -86,7 +86,7 @@ impl REGISTERS
         self.h = val
     }
     fn get_l(&self) -> u8 {
-        self.f
+        self.l
     }
 
     fn set_l(&mut self, val: u8) {
@@ -172,6 +172,12 @@ impl REGISTERS
 
     
 }
+enum FLAGS {
+    Z = 0b1000_0000,
+    N = 0b0100_0000,
+    H = 0b0010_0000,
+    C = 0b0001_0000,
+}
 
 struct CPU
 {
@@ -182,13 +188,17 @@ struct CPU
 }
 impl CPU
 {
-    fn new()
+    fn new() -> Self
     {
-        //CPU {registers: REGISTERS { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, h: 0, l: 0, pc: 0, sp: 0 },ime: true}
+        CPU{ registers: REGISTERS::new(), ime: true, opcode: 0, cycles: 0}
     }
     fn fetch(&mut self) -> u8
     {
         self.opcode
+    }
+    fn execute(&mut self, opcode: u8)
+    {
+        
     }
 }
 
