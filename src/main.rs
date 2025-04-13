@@ -1,13 +1,7 @@
-use std::net::AddrParseError;
-
-
 const DISPLAY_HEIGHT: usize = 144;
 const DISPLAY_WIDTH: usize = 160;
 
-
-
-struct REGISTERS
-{
+struct REGISTERS {
     a: u8,
     b: u8,
     c: u8,
@@ -17,10 +11,9 @@ struct REGISTERS
     h: u8,
     l: u8,
     pc: u16,
-    sp: u16
+    sp: u16,
 }
-impl REGISTERS
-{
+impl REGISTERS {
     pub fn new() -> REGISTERS {
         REGISTERS {
             a: 0,
@@ -111,8 +104,7 @@ impl REGISTERS
     }
 
     //since b, c, d, e, h, l can act as one 16 bit instuction we need to add code for that
-    fn get_bc(&self) ->u16
-    {
+    fn get_bc(&self) -> u16 {
         let mut result: u16;
         let reg1 = self.b as u16;
         let reg2 = self.c as u16;
@@ -120,13 +112,11 @@ impl REGISTERS
         result = result | reg2;
         result
     }
-    fn set_bc(&mut self, val: u16)
-    {
+    fn set_bc(&mut self, val: u16) {
         self.b = (val >> 8) as u8;
         self.c = val as u8;
     }
-    fn get_de(&self) ->u16
-    {
+    fn get_de(&self) -> u16 {
         let mut result: u16;
         let reg1 = self.d as u16;
         let reg2 = self.e as u16;
@@ -134,13 +124,11 @@ impl REGISTERS
         result = result | reg2;
         result
     }
-    fn set_de(&mut self, val: u16)
-    {
+    fn set_de(&mut self, val: u16) {
         self.d = (val >> 8) as u8;
         self.e = val as u8;
     }
-    fn get_hl(&self) ->u16
-    {
+    fn get_hl(&self) -> u16 {
         let mut result: u16;
         let reg1 = self.h as u16;
         let reg2 = self.l as u16;
@@ -148,8 +136,7 @@ impl REGISTERS
         result = result | reg2;
         result
     }
-    fn set_hl(&mut self, val: u16)
-    {
+    fn set_hl(&mut self, val: u16) {
         self.h = (val >> 8) as u8;
         self.l = val as u8;
     }
@@ -166,14 +153,10 @@ impl REGISTERS
         ret_pc
     }
 
-    fn inc_pc(&mut self) -> u16
-    {
-        self.pc +=1;
+    fn inc_pc(&mut self) -> u16 {
+        self.pc += 1;
         self.pc
     }
-
-
-    
 }
 enum FLAGS {
     Z = 0b1000_0000,
@@ -182,61 +165,57 @@ enum FLAGS {
     C = 0b0001_0000,
 }
 
-struct CPU<'a>
-{
+struct CPU<'a> {
     registers: REGISTERS,
     ime: bool, //interrupt master enable
     opcode: u8,
     cycles: u64,
-    ram: &'a mut RAM, 
+    ram: &'a mut RAM,
 }
-impl<'a> CPU<'a>
-{
-    fn new(ram: &'a mut RAM) -> Self
-    {
-        CPU{ registers: REGISTERS::new(), ime: true, opcode: 0, cycles: 0, ram}
+impl<'a> CPU<'a> {
+    fn new(ram: &'a mut RAM) -> Self {
+        CPU {
+            registers: REGISTERS::new(),
+            ime: true,
+            opcode: 0,
+            cycles: 0,
+            ram,
+        }
     }
-    fn fetch(&mut self, ram: &RAM) -> u8
-    {
-        let opcode = ram.read(self.registers.pc);
+    fn fetch(&mut self) -> u8 {
+        let opcode = self.ram.read(self.registers.pc);
         self.registers.pc += 1;
         opcode
     }
-    fn execute(&mut self, opcode: u8)
-    {
-        match opcode
-        {
+    fn execute(&mut self, opcode: u8) {
+        match opcode {
             0x00 => {
                 //NOP
-                self.cycles +=4;
+                self.cycles += 4;
                 return;
-            },
-            0x01 =>
-            {
+            }
+            0x01 => {
                 //Load 2 bytes into register BC
                 let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
                 let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let data = ((upper_byte as u16) <<8)| (lower_byte as u16);
+                let data = ((upper_byte as u16) << 8) | (lower_byte as u16);
                 self.registers.set_bc(data);
-                self.cycles+=12;
+                self.cycles += 12;
             }
-            0x02 =>
-            {
+            0x02 => {
                 //load the data in a into the ram address found in bc
                 let address = self.registers.get_bc();
                 let data = self.registers.get_a();
                 self.ram.write(address, data);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x03 =>
-            {
+            0x03 => {
                 //increment bc
                 let bc = self.registers.get_bc();
                 self.registers.set_bc((bc.wrapping_add(1)));
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x04 =>
-            {
+            0x04 => {
                 //increment B
                 let b = self.registers.get_b();
                 let value = b.wrapping_add(1);
@@ -244,69 +223,88 @@ impl<'a> CPU<'a>
 
                 //implement flags
                 //Z
-                if value == 0
-                {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
-                }
-                else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-
+                if value == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
                 }
 
                 //H
                 if (b & 0x0F) + 1 > 0x0F {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
                 }
 
                 //N
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8));
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
 
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x05 =>
-            {
+            0x05 => {
                 //decrement b
                 let b = self.registers.get_b();
                 let value = b.wrapping_sub(1);
                 self.registers.set_b(value);
 
                 //Z flag
-                if value == 0
-                {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
-                }
-                else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                if value == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
                 }
 
                 //H Flag
                 if (b & 0x0F) == 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
                 }
 
                 //N
-                self.registers.set_f(self.registers.get_f() | (FLAGS::N as u8));
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
 
-                self.cycles +=4;
-
-            },
-            0x06 =>
-            {
+                self.cycles += 4;
+            }
+            0x06 => {
                 //load 1 byte into B
                 let data = self.ram.read(self.registers.get_and_inc_pc());
-                self.registers.set_b( data);
-                self.cycles +=8;
-            },
-            0x07 =>
-            {
-                println!("0x07 is not implemented");
+                self.registers.set_b(data);
+                self.cycles += 8;
             }
-            0x08 => 
-            {
+            0x07 => {
+                let a = self.registers.get_a();
+                let msb = (a & 0b1000_0000) >> 7;
+                let result = (a<<1) | msb;
+
+                self.registers.set_a(result);
+
+                if result == 0 {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+            
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
+            
+                if msb != 0 {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }                
+                self.cycles +=8;
+            }
+            0x08 => {
                 //load load sp into the address from ram
                 let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
                 let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
@@ -316,653 +314,1775 @@ impl<'a> CPU<'a>
                 self.ram.write(address + 1, (sp >> 8) as u8);
 
                 self.cycles += 20;
-
-            },
-            0x09 =>
-            {
-                //not implemented
             }
-            0x0A =>
-            {
+            0x09 => {
+                let hl = self.registers.get_hl();
+                let bc = self.registers.get_bc();
+                let result = hl.wrapping_add(bc);
+
+                //Reset the N flag
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                //detect half carry
+                if (hl & 0xFFF) + (bc & 0xFFF) > 0xFFF {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+
+                //detect carry
+                if hl > 0xFFFF - bc {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8); // Carry flag
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.registers.set_hl(result);
+                self.cycles += 8;
+            }
+            0x0A => {
                 let data = self.ram.read(self.registers.get_bc());
                 self.registers.set_a(data);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x0B =>
-            {
+            0x0B => {
                 //decrement BC
                 let data = self.registers.get_bc();
                 self.registers.set_bc(data.wrapping_sub(1));
-                self.cycles+=8;
-            },
-            0x0C =>
-            {
-                //not implemented
+                self.cycles += 8;
             }
-            0x0D =>
-            {
-                //not implemented
+            0x0C => {
+                let c = self.registers.get_c();
+                let increment = c.wrapping_add(1);
+                self.registers.set_c(increment);
+
+                //set Z
+                if increment == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //set N
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                //detect half carry
+                if (c & 0x0F) + 1 > 0x0F {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x0E=>
-            {
+            0x0D => {
+                let c = self.registers.get_c();
+                let increment = c.wrapping_sub(1);
+                self.registers.set_c(increment);
+
+                //set Z
+                if increment == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //set N
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
+
+                //detect half carry
+                if (c & 0x0F) == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
+            }
+            0x0E => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_c(data);
-                self.cycles+=8;
+                self.cycles += 8;
+            }
+            0x0F => {
+                let mut a = self.registers.get_a();
+                let carry = a & 0b0000_0001;
+                let result = (a >> 1) | (carry << 7);
+                self.registers.set_a(result);
 
-            },
-            0x0F =>
-            {
-                //not implemented
-            },
-            0x10 =>
-            {
+                //Reset flags Z, N , H
+                self.registers.set_f(
+                    self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8),
+                );
+                if carry != 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.cycles += 4;
+            }
+            0x10 => {
                 //not implemented, stop
-            },
-            0x11 =>
-            {
+
+                println!("CPU Stopped");
+                self.cycles += 4;
+            }
+            0x11 => {
                 let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
                 let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
-                
+
                 let data = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 self.registers.set_de(data);
-                self.cycles+=12;
-            },
-            0x12 =>
-            {
+                self.cycles += 12;
+            }
+            0x12 => {
                 let address = self.registers.get_de();
                 let data = self.registers.get_a();
 
                 self.ram.write(address, data);
-                self.cycles+=8;
-            },
-            0x13 =>
-            {
+                self.cycles += 8;
+            }
+            0x13 => {
                 let value = self.registers.get_de();
                 self.registers.set_de(value.wrapping_add(1));
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x14 =>
-            {
-                //not implemented
+            0x14 => {
+                let d = self.registers.get_d();
+                let result = d.wrapping_add(1);
+                self.registers.set_d(result);
+
+                //Z
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                //H
+                if (d & 0x0F) + 1 > 0x0F {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+
+                self.cycles += 4;
             }
-            0x15 =>
-            {
-                //not implemented
+            0x15 => {
+                let d = self.registers.get_d();
+                let result = d.wrapping_sub(1);
+
+                //Z
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
+
+                //H
+                if (d & 0x0F) == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x16 =>
-            {
+            0x16 => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_d(data);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x17 =>
-            {
-                //not implemented
+            0x17 => {
+                let a = self.registers.get_a();
+                let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
+                let new_carry = (a & FLAGS::Z as u8) >> 7;
+                let result = (a << 1) | carry;
+
+                self.registers.set_a(result);
+
+                self.registers.set_f(
+                    self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8),
+                );
+
+                // Update C flag
+                if new_carry != 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+                self.cycles += 4;
             }
-            0x18 =>
-            {
+            0x18 => {
                 //relative jump
                 let jump = self.ram.read(self.registers.get_and_inc_pc()) as i8;
-                self.registers.set_pc(self.registers.get_pc().wrapping_add(jump as u16));
-                self.cycles +=12;
+                self.registers
+                    .set_pc(self.registers.get_pc().wrapping_add(jump as u16));
+                self.cycles += 12;
             }
-            0x19 =>
-            {
-                //not implemented
+            0x19 => {
+                let hl = self.registers.get_hl();
+                let de = self.registers.get_de();
+                let result = hl.wrapping_add(de);
+
+                self.registers.set_hl(result);
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                if (hl & 0xFFF) + (de & 0xFFF) > 0xFFF {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8); // Half-carry flag
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+
+                if hl > 0xFFFF - de {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8); // Carry flag
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.cycles += 8
             }
-            0x1A =>
-            {
+            0x1A => {
                 let data = self.ram.read(self.registers.get_de());
                 self.registers.set_a(data);
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x1B =>
-            {
+            0x1B => {
                 //decrement de
-                self.registers.set_de(self.registers.get_de().wrapping_sub(1));
-                self.cycles+=8;
+                self.registers
+                    .set_de(self.registers.get_de().wrapping_sub(1));
+                self.cycles += 8;
             }
-            0x1C =>
-            {
-                //not implemented
+            0x1C => {
+                let e = self.registers.get_e();
+                let result = e.wrapping_add(1);
+
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                if (e & 0x0F) + 1 > 0x0F {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x1E =>
-            {
+            0x1E => {
                 //load the next byte onto register E
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_e(data);
-                self.cycles+=8;
+                self.cycles += 8;
+            }
+            0x1F => {
+                let a = self.registers.get_a();
+                let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
+                let new_carry = a & 0b0000_0001;
+                let result = (a >> 1) | (carry << 7);
 
+                self.registers.set_a(result);
+
+                // Reset Z, N, H flags
+                self.registers.set_f(
+                    self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8),
+                );
+
+                if new_carry != 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.cycles += 4;
             }
-            0x1F =>
-            {
-                //not implemented
+            0x20 => {
+                let jump = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                if self.registers.get_f() & FLAGS::Z as u8 == 0 {
+                    self.registers
+                        .set_pc(self.registers.get_pc().wrapping_add(jump as i16 as u16));
+                    self.cycles += 12;
+                } else {
+                    self.cycles += 8;
+                }
             }
-            0x20 =>
-            {
-                //not implemented
-            }
-            0x21 =>
-            {
+            0x21 => {
                 let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
                 let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
 
                 let data = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 self.registers.set_hl(data);
-                self.cycles +=12;
-
+                self.cycles += 12;
             }
-            0x22 =>
-            {
+            0x22 => {
                 //load a into memory with the address found in HL and increment HL by 1
                 let data = self.registers.get_a();
                 let address = self.registers.get_hl();
                 self.ram.write(address, data);
 
-                self.cycles +=8;
+                self.cycles += 8;
+            }
+            0x23 => {
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_add(1));
+                self.cycles += 8;
+            }
+            0x24 => {
+                let h = self.registers.get_h();
+                let result = h.wrapping_add(1);
 
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                if (h & 0x0F) + 1 > 0x0F {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x23 =>
-            {
-                self.registers.set_hl(self.registers.get_hl().wrapping_add(1));
-                self.cycles +=8;
+            0x25 => {
+                let h = self.registers.get_h();
+                let result = h.wrapping_sub(1);
+
+                //Z
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
+
+                //H
+                if (h & 0x0F) == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x24 =>
-            {
-                //not implemented
-            }
-            0x25 => 
-            {
-                //not implemented
-            }
-            0x26 =>
-            {
+            0x26 => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_h(data);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x27 =>
-            {
-                //not implemented
+            0x27 => {
+                let mut a = self.registers.get_a();
+                let mut adjust = 0;
+                let carry_flag = self.registers.get_f() & FLAGS::C as u8 != 0;
+                let half_carry_flag = self.registers.get_f() & FLAGS::H as u8 != 0;
+                let subtract_flag = self.registers.get_f() & FLAGS::N as u8 != 0;
+
+                if !subtract_flag {
+                    if a > 0x99 || carry_flag {
+                        adjust |= 0x60;
+                        self.registers
+                            .set_f(self.registers.get_f() | FLAGS::C as u8);
+                    }
+                    if (a & 0x0F) > 0x09 || half_carry_flag {
+                        adjust |= 0x06;
+                    }
+                } else {
+                    if carry_flag {
+                        adjust |= 0x60;
+                    }
+                    if half_carry_flag {
+                        adjust |= 0x06;
+                    }
+                }
+
+                a = a.wrapping_add(adjust);
+                self.registers.set_a(a);
+
+                // Update Z flag (if result is zero)
+                if a == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                // Clear H flag
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+
+                self.cycles += 4;
             }
-            0x29 =>
-            {
-                //not implemented
+            0x28 => {
+                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                if self.registers.get_f() & FLAGS::Z as u8 != 0 {
+                    self.registers
+                        .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
+                    self.cycles += 12;
+                } else {
+                    self.cycles += 8;
+                }
             }
-            0x2A =>
-            {
+            0x29 => {
+                let hl = self.registers.get_hl();
+                let result = hl.wrapping_add(hl);
+
+                self.registers.set_hl(result);
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                if (hl & 0xFFF) + (hl & 0xFFF) > 0xFFF {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+
+                // C flag: Set if a carry occurs from bit 15 to bit 16
+                if hl > 0xFFFF - hl {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.registers.set_hl(result);
+                self.cycles += 8;
+            }
+            0x2A => {
                 let data = self.ram.read(self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl().wrapping_add(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_add(1));
                 self.registers.set_a(data);
-                self.cycles +=8;
-                
+                self.cycles += 8;
             }
-            0x2B =>
-            {
-                self.registers.set_hl(self.registers.get_hl().wrapping_sub(1));
-                self.cycles +=8;
+            0x2B => {
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_sub(1));
+                self.cycles += 8;
             }
-            0x2C =>
-            {
-                //not implemented
+            0x2C => {
+                let l = self.registers.get_l();
+                let result = l.wrapping_add(1);
+                self.registers.set_f(result);
+
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+                if (l & 0x0F) + 1 > 0x0F {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x2D =>
-            {
-                //not implemented
+            0x2D => {
+                let l = self.registers.get_l();
+                let result = l.wrapping_sub(1);
+
+                //Z
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
+
+                //H
+                if (l & 0x0F) == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 4;
             }
-            0x2E =>
-            {
+            0x2E => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_l(data);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x2F =>
-            {
-                //not implemented
+            0x2F => {
+                let a = self.registers.get_a();
+                self.registers.set_a(!a); // Bitwise complement
+            
+                // Set N and H flags
+                self.registers.set_f(self.registers.get_f() | FLAGS::N as u8 | FLAGS::H as u8);
+            
+                self.cycles += 4;
             }
-            0x30 =>
-            {
-                //not implemented
+            0x30 => {
+                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                if self.registers.get_f() & FLAGS::C as u8 == 0 {
+                    self.registers.set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
+                    self.cycles += 12;
+                } else {
+                    self.cycles += 8;
+                }
             }
-            0x31 =>
-            {
+            0x31 => {
                 let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
                 let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let data = ((upper_byte as u16)<<8)|lower_byte as u16;
+                let data = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.registers.set_sp(data);
-                self.cycles +=12;
+                self.cycles += 12;
             }
-            0x32 =>
-            {
+            0x32 => {
                 let data = self.registers.get_a();
                 self.ram.write(self.registers.get_hl(), data);
-                self.registers.set_hl(self.registers.get_hl().wrapping_sub(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_sub(1));
 
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x33 =>
-            {
-                self.registers.set_sp(self.registers.get_sp().wrapping_add(1));
-                self.cycles+=8;
+            0x33 => {
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                self.cycles += 8;
             }
-            0x34 =>
-            {
-                //not implmented
+            0x34 => {
+                let address = self.registers.get_hl();
+                let value = self.ram.read(address);
+                let result = value.wrapping_add(1);
+                self.ram.write(address, result);
+            
+                if result == 0 {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+            
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8));
+            
+                if (value & 0x0F) + 1 > 0x0F {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+            
+                self.cycles += 12;
             }
-            0x35 =>
-            {
-                //not implemented
+            0x35 => {
+                let address = self.registers.get_hl();
+                let value = self.ram.read(address);
+                let result = value.wrapping_sub(1);
+                self.ram.write(address, result);
+
+                //Z
+                if result == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+
+                //N
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
+
+                //H
+                if (value & 0x0F) == 0 {
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+                self.cycles += 12;
             }
-            0x36 =>
-            {
+            0x36 => {
                 let address = self.registers.get_hl();
                 let data = self.ram.read(self.registers.get_and_inc_pc());
                 self.ram.write(address, data);
-                self.cycles+=12;
+                self.cycles += 12;
             }
-            0x37 =>
-            {
-                //not implemented
+            0x37 => {
+
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
+
+                self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+
+                self.cycles += 4;
             }
-            0x38 =>
-            {
-                //not implemented
+            0x38 => {
+                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                if self.registers.get_f() & FLAGS::C as u8 != 0
+                {
+                    self.registers.set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
+                    self.cycles +=12;
+                }
+                else {
+                    self.cycles +=8;
+                }
             }
-            0x39 =>
-            {
-                //not impleented
+            0x39 => {
+                let hl = self.registers.get_hl();
+                let sp = self.registers.get_sp();
+                let result = hl.wrapping_add(sp);
+                self.registers.set_hl(result);
+
+                if (hl & 0xFFF) + (sp & 0xFFF) > 0xFFF {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+            
+                // Set C flag if carry occurs from bit 15 to bit 16
+                if hl > 0xFFFF - sp {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+
+                self.cycles += 8;
             }
-            0x3A =>
-            {
+            0x3A => {
                 let data = self.ram.read(self.registers.get_hl());
-                self.registers.set_hl(self.registers.get_hl().wrapping_sub(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_sub(1));
 
                 self.registers.set_a(data);
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x3B =>
-            {
-                self.registers.set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.cycles+=8;
+            0x3B => {
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.cycles += 8;
             }
-            0x3C =>
+            0x3C => {
+            let a = self.registers.get_a();
+            let result = a.wrapping_add(1);
+            self.registers.set_a(result);
+
+            if result == 0
             {
-                //not implemented
+                self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
             }
-            0x3D =>
-            {
-                //not implemented
+            else {
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
             }
-            0x3E =>
+
+            self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
+            if (a & 0x0F) +1 > 0x0F
             {
+                self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+            }
+            else {
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+            }
+            self.cycles +=4;
+
+            }
+            0x3D => {
+                let d = self.registers.get_d();
+                let result = d.wrapping_sub(1);
+                self.registers.set_d(result);
+            
+                // Z flag: Set if result is zero
+                if result == 0 {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                }
+            
+                // N flag: Always set
+                self.registers.set_f(self.registers.get_f() | FLAGS::N as u8);
+            
+                // H flag: Set if borrowing occurs from bit 4
+                if (d & 0x0F) == 0 {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                } else {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                }
+            
+                self.cycles += 4;
+            }
+            0x3E => {
                 let value = self.ram.read(self.registers.get_and_inc_pc());
                 self.registers.set_a(value);
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x3F =>
-            {
-                //not implemented
-            }
-            0x40 =>
-            {
+            0x3F => {
+                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
+
+                if self.registers.get_f() & FLAGS::C as u8 != 0 {
+                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8)); // Clear Carry
+                } else {
+                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8); // Set Carry
+                }
                 self.cycles +=4;
             }
-            0x41 =>
-            {
+            0x40 => {
+                self.cycles += 4;
+            }
+            0x41 => {
                 self.registers.set_b(self.registers.get_c());
-                self.cycles+=4;
+                self.cycles += 4;
             }
-            0x42 =>
-            {
+            0x42 => {
                 self.registers.set_b(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x43 =>
-            {
+            0x43 => {
                 self.registers.set_b(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x44 =>
-            {
+            0x44 => {
                 self.registers.set_b(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x45 =>
-            {
+            0x45 => {
                 self.registers.set_b(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x46 =>
-            {
+            0x46 => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_b(value);
-                self.cycles+=4;
-
+                self.cycles += 4;
             }
-            0x47 =>
-            {
+            0x47 => {
                 self.registers.set_b(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x48 =>
-            {
+            0x48 => {
                 self.registers.set_c(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x49 =>
-            {
-                self.cycles+=4;
+            0x49 => {
+                self.cycles += 4;
             }
-            0x4A =>
-            {
+            0x4A => {
                 self.registers.set_c(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x4B =>
-            {
+            0x4B => {
                 self.registers.set_c(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x4C =>
-            {
+            0x4C => {
                 self.registers.set_c(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x4D =>
-            {
+            0x4D => {
                 self.registers.set_c(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x4E =>
-            {
+            0x4E => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_c(value);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x4F =>
-            {
+            0x4F => {
                 self.registers.set_c(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x50 =>
-            {
+            0x50 => {
                 self.registers.set_d(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x51 =>
-            {
+            0x51 => {
                 self.registers.set_d(self.registers.get_c());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x52 =>
-            {
-                self.cycles+=4;
+            0x52 => {
+                self.cycles += 4;
             }
-            0x53 =>
-            {
+            0x53 => {
                 self.registers.set_d(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x54 =>
-            {
+            0x54 => {
                 self.registers.set_d(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x55 =>
-            {
+            0x55 => {
                 self.registers.set_d(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x56 =>
-            {
+            0x56 => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_d(value);
-                self.cycles+=8;
+                self.cycles += 8;
             }
-            0x57 =>
-            {
+            0x57 => {
                 self.registers.set_d(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x58 =>
-            {
+            0x58 => {
                 self.registers.set_e(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x59 =>
-            {
+            0x59 => {
                 self.registers.set_e(self.registers.get_c());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x5A =>
-            {
+            0x5A => {
                 self.registers.set_e(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x5B =>
-            {
-                self.cycles +=4;
+            0x5B => {
+                self.cycles += 4;
             }
-            0x5C =>
-            {
+            0x5C => {
                 self.registers.set_e(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x5D =>
-            {
+            0x5D => {
                 self.registers.set_e(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x5E =>
-            {
+            0x5E => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_e(value);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x5F =>
-            {
+            0x5F => {
                 self.registers.set_e(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x60 =>
-            {
+            0x60 => {
                 self.registers.set_h(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x61 =>
-            {
+            0x61 => {
                 self.registers.set_h(self.registers.get_c());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x62 =>
-            {
+            0x62 => {
                 self.registers.set_h(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x63 =>
-            {
+            0x63 => {
                 self.registers.set_h(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x64 =>
-            {
-                self.cycles +=4;
+            0x64 => {
+                self.cycles += 4;
             }
-            0x65 =>
-            {
+            0x65 => {
                 self.registers.set_h(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x66 =>
-            {
+            0x66 => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_h(value);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x67 =>
-            {
+            0x67 => {
                 self.registers.set_h(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x68 =>
-            {
+            0x68 => {
                 self.registers.set_l(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x69 =>
-            {
+            0x69 => {
                 self.registers.set_l(self.registers.get_c());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x6A =>
-            {
+            0x6A => {
                 self.registers.set_l(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x6B => 
-            {
+            0x6B => {
                 self.registers.set_l(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x6C =>
-            {
+            0x6C => {
                 self.registers.set_l(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x6D =>
-            {
-                self.cycles +=4;
+            0x6D => {
+                self.cycles += 4;
             }
-            0x6E =>
-            {
+            0x6E => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_l(value);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x6F =>
-            {
+            0x6F => {
                 self.registers.set_l(self.registers.get_a());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x70 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_b());
-                self.cycles +=8;
+            0x70 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_b());
+                self.cycles += 8;
             }
-            0x71 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_c());
-                self.cycles +=8;
+            0x71 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_c());
+                self.cycles += 8;
             }
-            0x72 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_d());
-                self.cycles +=8;
+            0x72 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_d());
+                self.cycles += 8;
             }
-            0x73 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_e());
-                self.cycles +=8;
+            0x73 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_e());
+                self.cycles += 8;
             }
-            0x74 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_h());
-                self.cycles +=8;
+            0x74 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_h());
+                self.cycles += 8;
             }
-            0x75 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_l());
-                self.cycles +=8;
+            0x75 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_l());
+                self.cycles += 8;
             }
-            0x76 =>
-            {
+            0x76 => {
                 //halt, not implemented
             }
-            0x76 =>
-            {
-                self.ram.write(self.registers.get_hl(), self.registers.get_a());
-                self.cycles +=8;
+            0x77 => {
+                self.ram
+                    .write(self.registers.get_hl(), self.registers.get_a());
+                self.cycles += 8;
             }
-            0x78 =>
-            {
+            0x78 => {
                 self.registers.set_a(self.registers.get_b());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x79 =>
-            {
+            0x79 => {
                 self.registers.set_a(self.registers.get_c());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x7A =>
-            {
+            0x7A => {
                 self.registers.set_a(self.registers.get_d());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x7B =>
-            {
+            0x7B => {
                 self.registers.set_a(self.registers.get_e());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x7C =>
-            {
+            0x7C => {
                 self.registers.set_a(self.registers.get_h());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x7D =>
-            {
+            0x7D => {
                 self.registers.set_a(self.registers.get_l());
-                self.cycles +=4;
+                self.cycles += 4;
             }
-            0x7E =>
-            {
+            0x7E => {
                 let value = self.ram.read(self.registers.get_hl());
                 self.registers.set_a(value);
-                self.cycles +=8;
+                self.cycles += 8;
             }
-            0x7F =>
+            0x7F => {
+                self.cycles += 4;
+            }
+            0x80 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 0));
+                self.cycles += 8;
+            }
+            0x81 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 0));
+                self.cycles += 8;
+            }
+            0x82 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 0)); 
+                self.cycles += 8;
+            }
+            0x83 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 0)); 
+                self.cycles += 8;
+            }
+            0x84 =>
             {
-                self.cycles +=4;
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 0));
+                self.cycles += 8;
             }
-            0x80 =>
+            0x85 =>
             {
-                //not implemented
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 0));
+                self.cycles += 8;
             }
-            0x81 =>
+            0x86 =>
             {
-                //not implemented
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 0)); 
+                self.cycles += 16;
             }
-            0x82 =>
+            0x87 =>
             {
-                //not implemented
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 0)); // Reset bit 0
+                self.cycles += 8;
             }
-            0x83 =>
+            0x88 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 1));
+                self.cycles += 8;
+            }
+            0x89 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 1));
+                self.cycles += 8;
+            }
+            0x8A => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 1)); 
+                self.cycles += 8;
+            }
+            0x8B => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 1)); 
+                self.cycles += 8;
+            }
+            0x8C =>
             {
-                //not implemented
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 1));
+                self.cycles += 8;
             }
-            _ => println!("{} Not Implemented", opcode)
+            0x8D =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 1));
+                self.cycles += 8;
+            }
+            0x8E =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 1)); 
+                self.cycles += 16;
+            }
+            0x8F =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 1)); // Reset bit 0
+                self.cycles += 8;
+            }
+            0x90 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 2));
+                self.cycles += 8;
+            }
+            0x91 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 2));
+                self.cycles += 8;
+            }
+            0x92 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 2)); 
+                self.cycles += 8;
+            }
+            0x93 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 2)); 
+                self.cycles += 8;
+            }
+            0x94 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 2));
+                self.cycles += 8;
+            }
+            0x95 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 2));
+                self.cycles += 8;
+            }
+            0x96 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 2)); 
+                self.cycles += 16;
+            }
+            0x97 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 2)); // Reset bit 0
+                self.cycles += 8;
+            }
+            0x98 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 3));
+                self.cycles += 8;
+            }
+            0x99 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 3));
+                self.cycles += 8;
+            }
+            0x9A => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 3)); 
+                self.cycles += 8;
+            }
+            0x9B => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 3)); 
+                self.cycles += 8;
+            }
+            0x9C =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 3));
+                self.cycles += 8;
+            }
+            0x9D =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 3));
+                self.cycles += 8;
+            }
+            0x9E =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 3)); 
+                self.cycles += 16;
+            }
+            0x9F =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 3)); // Reset bit 0
+                self.cycles += 8;
+            }
+            0xA0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 4));
+                self.cycles += 8;
+            }
+            0xA1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 4));
+                self.cycles += 8;
+            }
+            0xA2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 4)); 
+                self.cycles += 8;
+            }
+            0xA3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 4)); 
+                self.cycles += 8;
+            }
+            0xA4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 4));
+                self.cycles += 8;
+            }
+            0xA5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 4));
+                self.cycles += 8;
+            }
+            0xA6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 4)); 
+                self.cycles += 16;
+            }
+            0xA7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 4));
+                self.cycles += 8;          
+            }
+            0xA8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 5));
+                self.cycles += 8;
+            }
+            0xA9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 5));
+                self.cycles += 8;
+            }
+            0xAA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 5)); 
+                self.cycles += 8;
+            }
+            0xAB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 5)); 
+                self.cycles += 8;
+            }
+            0xAC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 5));
+                self.cycles += 8;
+            }
+            0xAD =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 5));
+                self.cycles += 8;
+            }
+            0xAE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 5)); 
+                self.cycles += 16;
+            }
+            0xAF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 5));
+                self.cycles += 8;          
+            }
+            0xB0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 6));
+                self.cycles += 8;
+            }
+            0xB1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 6));
+                self.cycles += 8;
+            }
+            0xB2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 6)); 
+                self.cycles += 8;
+            }
+            0xB3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 6)); 
+                self.cycles += 8;
+            }
+            0xB4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 6));
+                self.cycles += 8;
+            }
+            0xB5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 6));
+                self.cycles += 8;
+            }
+            0xB6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 6)); 
+                self.cycles += 16;
+            }
+            0xB7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 6));
+                self.cycles += 8;          
+            }
+            0xB8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & !(1 << 7));
+                self.cycles += 8;
+            }
+            0xB9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & !(1 << 7));
+                self.cycles += 8;
+            }
+            0xBA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & !(1 << 7)); 
+                self.cycles += 8;
+            }
+            0xBB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & !(1 << 7)); 
+                self.cycles += 8;
+            }
+            0xBC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & !(1 << 7));
+                self.cycles += 8;
+            }
+            0xBD =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & !(1 << 7));
+                self.cycles += 8;
+            }
+            0xBE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & !(1 << 7)); 
+                self.cycles += 16;
+            }
+            0xBF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & !(1 << 7));
+                self.cycles += 8;          
+            }
+            0xC0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 0));
+                self.cycles += 8;
+            }
+            0xC1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 0));
+                self.cycles += 8;
+            }
+            0xC2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 0)); 
+                self.cycles += 8;
+            }
+            0xC3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 0)); 
+                self.cycles += 8;
+            }
+            0xC4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 0));
+                self.cycles += 8;
+            }
+            0xC5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 0));
+                self.cycles += 8;
+            }
+            0xC6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 0)); 
+                self.cycles += 16;
+            }
+            0xC7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 0));
+                self.cycles += 8;          
+            }
+            0xC8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 1));
+                self.cycles += 8;
+            }
+            0xC9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 1));
+                self.cycles += 8;
+            }
+            0xCA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 1)); 
+                self.cycles += 8;
+            }
+            0xCB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 1)); 
+                self.cycles += 8;
+            }
+            0xCC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 1));
+                self.cycles += 8;
+            }
+            0xCD =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 1));
+                self.cycles += 8;
+            }
+            0xCE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 1)); 
+                self.cycles += 16;
+            }
+            0xCF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 1));
+                self.cycles += 8;          
+            }
+            0xD0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 2));
+                self.cycles += 8;
+            }
+            0xD1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 2));
+                self.cycles += 8;
+            }
+            0xD2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 2)); 
+                self.cycles += 8;
+            }
+            0xD3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 2)); 
+                self.cycles += 8;
+            }
+            0xD4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 2));
+                self.cycles += 8;
+            }
+            0xD5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 2));
+                self.cycles += 8;
+            }
+            0xD6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 2)); 
+                self.cycles += 16;
+            }
+            0xD7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 2));
+                self.cycles += 8;          
+            }
+            0xD8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 3));
+                self.cycles += 8;
+            }
+            0xD9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 3));
+                self.cycles += 8;
+            }
+            0xDA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 3)); 
+                self.cycles += 8;
+            }
+            0xDB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 3)); 
+                self.cycles += 8;
+            }
+            0xDC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 3));
+                self.cycles += 8;
+            }
+            0xDD =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 3));
+                self.cycles += 8;
+            }
+            0xDE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 3)); 
+                self.cycles += 16;
+            }
+            0xDF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 3));
+                self.cycles += 8;          
+            }
+            0xE0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 4));
+                self.cycles += 8;
+            }
+            0xE1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 4));
+                self.cycles += 8;
+            }
+            0xE2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 4)); 
+                self.cycles += 8;
+            }
+            0xE3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 4)); 
+                self.cycles += 8;
+            }
+            0xE4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 4));
+                self.cycles += 8;
+            }
+            0xE5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 4));
+                self.cycles += 8;
+            }
+            0xE6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 4)); 
+                self.cycles += 16;
+            }
+            0xE7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 4));
+                self.cycles += 8;          
+            }
+            0xE8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 5));
+                self.cycles += 8;
+            }
+            0xE9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 5));
+                self.cycles += 8;
+            }
+            0xEA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 5)); 
+                self.cycles += 8;
+            }
+            0xEB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 5)); 
+                self.cycles += 8;
+            }
+            0xEC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 5));
+                self.cycles += 8;
+            }
+            0xED =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 5));
+                self.cycles += 8;
+            }
+            0xEE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 <<5)); 
+                self.cycles += 16;
+            }
+            0xEF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 5));
+                self.cycles += 8;          
+            }
+            0xF0 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 6));
+                self.cycles += 8;
+            }
+            0xF1 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 6));
+                self.cycles += 8;
+            }
+            0xF2 => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 6)); 
+                self.cycles += 8;
+            }
+            0xF3 => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 6)); 
+                self.cycles += 8;
+            }
+            0xF4 =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 6));
+                self.cycles += 8;
+            }
+            0xF5 =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 6));
+                self.cycles += 8;
+            }
+            0xF6 =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 6)); 
+                self.cycles += 16;
+            }
+            0xF7 =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 6));
+                self.cycles += 8;          
+            }
+            0xF8 => {
+                let b = self.registers.get_b();
+                self.registers.set_b(b & (1 << 7));
+                self.cycles += 8;
+            }
+            0xF9 => {
+                let c = self.registers.get_c();
+                self.registers.set_c(c & (1 << 7));
+                self.cycles += 8;
+            }
+            0xFA => {
+                let data = self.registers.get_d();
+                self.registers.set_d(data & (1 << 7)); 
+                self.cycles += 8;
+            }
+            0xFB => {
+                let data = self.registers.get_e();
+                self.registers.set_e(data & (1 << 7)); 
+                self.cycles += 8;
+            }
+            0xFC =>
+            {
+                let data = self.registers.get_h();
+                self.registers.set_h(data & (1 << 7));
+                self.cycles += 8;
+            }
+            0xFD =>
+            {
+                let data = self.registers.get_l();
+                self.registers.set_l(data & (1 << 7));
+                self.cycles += 8;
+            }
+            0xFE =>
+            {
+                let data = self.registers.get_hl();
+                self.registers.set_hl(data & (1 << 7)); 
+                self.cycles += 16;
+            }
+            0xFF =>
+            {
+                let data = self.registers.get_a();
+                self.registers.set_a(data & (1 << 7));
+                self.cycles += 8;          
+            }
+
+            _ => println!("{} Not Implemented", opcode),
         }
-        
+
     }
+
 }
 
-
-struct RAM{
-    memory: [u8; 65536]
+struct RAM {
+    memory: [u8; 65536],
 }
-impl RAM
-{
-    fn new() -> Self
-    {
+impl RAM {
+    fn new() -> Self {
         RAM { memory: [0; 65536] }
     }
-    fn read(&self, address: u16) -> u8
-    {
+    fn read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
-    fn write(& mut self, address: u16, data: u8)
-    {
+    fn write(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
     }
 }
