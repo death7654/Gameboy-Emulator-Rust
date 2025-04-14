@@ -32,75 +32,75 @@ impl REGISTERS {
         self.a
     }
 
-    fn set_a(&mut self, val: u8) {
-        self.a = val;
+    fn set_a(&mut self, value: u8) {
+        self.a = value;
     }
 
     fn get_b(&self) -> u8 {
         self.b
     }
 
-    fn set_b(&mut self, val: u8) {
-        self.b = val;
+    fn set_b(&mut self, value: u8) {
+        self.b = value;
     }
 
     fn get_c(&self) -> u8 {
         self.c
     }
 
-    fn set_c(&mut self, val: u8) {
-        self.c = val
+    fn set_c(&mut self, value: u8) {
+        self.c = value
     }
     fn get_d(&self) -> u8 {
         self.d
     }
 
-    fn set_d(&mut self, val: u8) {
-        self.d = val;
+    fn set_d(&mut self, value: u8) {
+        self.d = value;
     }
 
     fn get_e(&self) -> u8 {
         self.e
     }
 
-    fn set_e(&mut self, val: u8) {
-        self.e = val;
+    fn set_e(&mut self, value: u8) {
+        self.e = value;
     }
 
     fn get_f(&self) -> u8 {
         self.f
     }
 
-    fn set_f(&mut self, val: u8) {
-        self.f = val & 0xF0
+    fn set_f(&mut self, value: u8) {
+        self.f = value & 0xF0
     }
     fn get_h(&self) -> u8 {
         self.h
     }
 
-    fn set_h(&mut self, val: u8) {
-        self.h = val
+    fn set_h(&mut self, value: u8) {
+        self.h = value
     }
     fn get_l(&self) -> u8 {
         self.l
     }
 
-    fn set_l(&mut self, val: u8) {
-        self.l = val
+    fn set_l(&mut self, value: u8) {
+        self.l = value
     }
     fn get_pc(&self) -> u16 {
         self.pc
     }
 
-    fn set_pc(&mut self, val: u16) {
-        self.pc = val
+    fn set_pc(&mut self, value: u16) {
+        self.pc = value
     }
     fn get_sp(&self) -> u16 {
         self.sp
     }
 
-    fn set_sp(&mut self, val: u16) {
-        self.sp = val
+    fn set_sp(&mut self, value: u16) {
+        self.sp = value
     }
 
     //since b, c, d, e, h, l can act as one 16 bit instuction we need to add code for that
@@ -112,9 +112,9 @@ impl REGISTERS {
         result = result | reg2;
         result
     }
-    fn set_bc(&mut self, val: u16) {
-        self.b = (val >> 8) as u8;
-        self.c = val as u8;
+    fn set_bc(&mut self, value: u16) {
+        self.b = (value >> 8) as u8;
+        self.c = value as u8;
     }
     fn get_de(&self) -> u16 {
         let mut result: u16;
@@ -124,9 +124,9 @@ impl REGISTERS {
         result = result | reg2;
         result
     }
-    fn set_de(&mut self, val: u16) {
-        self.d = (val >> 8) as u8;
-        self.e = val as u8;
+    fn set_de(&mut self, value: u16) {
+        self.d = (value >> 8) as u8;
+        self.e = value as u8;
     }
     fn get_hl(&self) -> u16 {
         let mut result: u16;
@@ -136,16 +136,16 @@ impl REGISTERS {
         result = result | reg2;
         result
     }
-    fn set_hl(&mut self, val: u16) {
-        self.h = (val >> 8) as u8;
-        self.l = val as u8;
+    fn set_hl(&mut self, value: u16) {
+        self.h = (value >> 8) as u8;
+        self.l = value as u8;
     }
     fn get_af(&self) -> u16 {
         (self.a as u16) << 8 | self.f as u16
     }
-    fn set_af(&mut self, val: u16) {
-        self.a = (val >> 8) as u8;
-        self.f = (val & 0x00F0) as u8;
+    fn set_af(&mut self, value: u16) {
+        self.a = (value >> 8) as u8;
+        self.f = (value & 0x00F0) as u8;
     }
     fn get_and_inc_pc(&mut self) -> u16 {
         let ret_pc = self.pc;
@@ -216,65 +216,13 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x04 => {
-                //increment B
-                let b = self.registers.get_b();
-                let value = b.wrapping_add(1);
-                self.registers.set_b(value);
-
-                //implement flags
-                //Z
-                if value == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //H
-                if (b & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                self.cycles += 4;
+                let data  = self.increment_8_bit(self.registers.get_b());
+                self.registers.set_b(data);
             }
             0x05 => {
                 //decrement b
-                let b = self.registers.get_b();
-                let value = b.wrapping_sub(1);
-                self.registers.set_b(value);
-
-                //Z flag
-                if value == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //H Flag
-                if (b & 0x0F) == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
-
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_b());
+                self.registers.set_b(data);            
             }
             0x06 => {
                 //load 1 byte into B
@@ -352,65 +300,15 @@ impl<'a> CPU<'a> {
             }
             0x0B => {
                 //decrement BC
-                let data = self.registers.get_bc();
-                self.registers.set_bc(data.wrapping_sub(1));
+                self.registers.set_bc(self.registers.get_bc().wrapping_sub(1));
                 self.cycles += 8;
             }
             0x0C => {
-                let c = self.registers.get_c();
-                let increment = c.wrapping_add(1);
-                self.registers.set_c(increment);
-
-                //set Z
-                if increment == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //set N
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                //detect half carry
-                if (c & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
-            }
+                let data  = self.increment_8_bit(self.registers.get_c());
+                self.registers.set_c(data);            }
             0x0D => {
-                let c = self.registers.get_c();
-                let increment = c.wrapping_sub(1);
-                self.registers.set_c(increment);
-
-                //set Z
-                if increment == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //set N
-                self.registers
-                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
-
-                //detect half carry
-                if (c & 0x0F) == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_c());
+                self.registers.set_c(data);
             }
             0x0E => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
@@ -465,60 +363,12 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x14 => {
-                let d = self.registers.get_d();
-                let result = d.wrapping_add(1);
-                self.registers.set_d(result);
-
-                //Z
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                //H
-                if (d & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-
-                self.cycles += 4;
+                let data  = self.increment_8_bit(self.registers.get_d());
+                self.registers.set_d(data);
             }
             0x15 => {
-                let d = self.registers.get_d();
-                let result = d.wrapping_sub(1);
-
-                //Z
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
-
-                //H
-                if (d & 0x0F) == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_d());
+                self.registers.set_d(data);
             }
             0x16 => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
@@ -595,28 +445,13 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x1C => {
-                let e = self.registers.get_e();
-                let result = e.wrapping_add(1);
-
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                if (e & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.increment_8_bit(self.registers.get_e());
+                self.registers.set_e(data);
+            }
+            0x1d =>
+            {
+                let data  = self.decrement_8_bit(self.registers.get_e());
+                self.registers.set_e(data);
             }
             0x1E => {
                 //load the next byte onto register E
@@ -680,55 +515,12 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x24 => {
-                let h = self.registers.get_h();
-                let result = h.wrapping_add(1);
-
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                if (h & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.increment_8_bit(self.registers.get_h());
+                self.registers.set_h(data);
             }
             0x25 => {
-                let h = self.registers.get_h();
-                let result = h.wrapping_sub(1);
-
-                //Z
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
-
-                //H
-                if (h & 0x0F) == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_h());
+                self.registers.set_h(data);
             }
             0x26 => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
@@ -830,56 +622,12 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x2C => {
-                let l = self.registers.get_l();
-                let result = l.wrapping_add(1);
-                self.registers.set_f(result);
-
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-                if (l & 0x0F) + 1 > 0x0F {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.increment_8_bit(self.registers.get_l());
+                self.registers.set_l(data);
             }
             0x2D => {
-                let l = self.registers.get_l();
-                let result = l.wrapping_sub(1);
-
-                //Z
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-
-                //N
-                self.registers
-                    .set_f(self.registers.get_f() | (FLAGS::N as u8));
-
-                //H
-                if (l & 0x0F) == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_l());
+                self.registers.set_l(data);
             }
             0x2E => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
@@ -1035,53 +783,12 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x3C => {
-            let a = self.registers.get_a();
-            let result = a.wrapping_add(1);
-            self.registers.set_a(result);
-
-            if result == 0
-            {
-                self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
-            }
-            else {
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-            }
-
-            self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8));
-
-            if (a & 0x0F) +1 > 0x0F
-            {
-                self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
-            }
-            else {
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
-            }
-            self.cycles +=4;
-
+                let data  = self.increment_8_bit(self.registers.get_a());
+                self.registers.set_a(data);
             }
             0x3D => {
-                let d = self.registers.get_d();
-                let result = d.wrapping_sub(1);
-                self.registers.set_d(result);
-            
-                // Z flag: Set if result is zero
-                if result == 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
-                }
-            
-                // N flag: Always set
-                self.registers.set_f(self.registers.get_f() | FLAGS::N as u8);
-            
-                // H flag: Set if borrowing occurs from bit 4
-                if (d & 0x0F) == 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
-                }
-            
-                self.cycles += 4;
+                let data  = self.decrement_8_bit(self.registers.get_a());
+                self.registers.set_a(data);
             }
             0x3E => {
                 let value = self.ram.read(self.registers.get_and_inc_pc());
@@ -1361,36 +1068,30 @@ impl<'a> CPU<'a> {
                 self.cycles += 4;
             }
             0x80 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 0));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 0);
+                self.registers.set_b(data);
             }
             0x81 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 0));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 0);
+                self.registers.set_c(data);
             }
             0x82 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 0)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 0);
+                self.registers.set_d(data);
             }
             0x83 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 0)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 0);
+                self.registers.set_e(data);
             }
             0x84 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 0));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 0);
+                self.registers.set_h(data);
             }
             0x85 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 0));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 0);
+                self.registers.set_l(data);
             }
             0x86 =>
             {
@@ -1400,41 +1101,34 @@ impl<'a> CPU<'a> {
             }
             0x87 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 0)); // Reset bit 0
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_a(), 0);
+                self.registers.set_a(data);
             }
             0x88 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 1));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 1);
+                self.registers.set_b(data);
             }
             0x89 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 1));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 1);
+                self.registers.set_c(data);
             }
             0x8A => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 1)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 1);
+                self.registers.set_d(data);
             }
             0x8B => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 1)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 1);
+                self.registers.set_e(data);
             }
             0x8C =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 1));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 1);
+                self.registers.set_h(data);
             }
             0x8D =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 1));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 1);
+                self.registers.set_l(data);
             }
             0x8E =>
             {
@@ -1444,41 +1138,34 @@ impl<'a> CPU<'a> {
             }
             0x8F =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 1)); // Reset bit 0
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_a(), 1);
+                self.registers.set_a(data);
             }
             0x90 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 2));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 2);
+                self.registers.set_b(data);
             }
             0x91 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 2));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 2);
+                self.registers.set_c(data);
             }
             0x92 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 2)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 2);
+                self.registers.set_d(data);
             }
             0x93 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 2)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 2);
+                self.registers.set_e(data);
             }
             0x94 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 2));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 2);
+                self.registers.set_h(data);
             }
             0x95 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 2));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 2);
+                self.registers.set_l(data);
             }
             0x96 =>
             {
@@ -1488,41 +1175,34 @@ impl<'a> CPU<'a> {
             }
             0x97 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 2)); // Reset bit 0
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_a(), 2);
+                self.registers.set_a(data);
             }
             0x98 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 3));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 3);
+                self.registers.set_b(data);
             }
             0x99 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 3));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 3);
+                self.registers.set_c(data);
             }
             0x9A => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 3)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 3);
+                self.registers.set_d(data);
             }
             0x9B => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 3)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 3);
+                self.registers.set_e(data);
             }
             0x9C =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 3));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 3);
+                self.registers.set_h(data);
             }
             0x9D =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 3));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 3);
+                self.registers.set_l(data);
             }
             0x9E =>
             {
@@ -1532,41 +1212,34 @@ impl<'a> CPU<'a> {
             }
             0x9F =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 3)); // Reset bit 0
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_a(), 3);
+                self.registers.set_a(data);
             }
             0xA0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 4));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 4);
+                self.registers.set_b(data);
             }
             0xA1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 4));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 4);
+                self.registers.set_c(data);
             }
             0xA2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 4)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 4);
+                self.registers.set_d(data);
             }
             0xA3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 4)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 4);
+                self.registers.set_e(data);
             }
             0xA4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 4));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 4);
+                self.registers.set_h(data);
             }
             0xA5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 4));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 4);
+                self.registers.set_l(data);
             }
             0xA6 =>
             {
@@ -1576,41 +1249,34 @@ impl<'a> CPU<'a> {
             }
             0xA7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 4));
-                self.cycles += 8;          
+                let data = self.zero_bit_8bit(self.registers.get_a(), 4);
+                self.registers.set_a(data);
             }
             0xA8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 5));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 5);
+                self.registers.set_b(data);
             }
             0xA9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 5));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 5);
+                self.registers.set_c(data);
             }
             0xAA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 5)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 5);
+                self.registers.set_d(data);
             }
             0xAB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 5)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 5);
+                self.registers.set_e(data);
             }
             0xAC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 5));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 5);
+                self.registers.set_h(data);
             }
             0xAD =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 5));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 5);
+                self.registers.set_l(data);
             }
             0xAE =>
             {
@@ -1620,41 +1286,34 @@ impl<'a> CPU<'a> {
             }
             0xAF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 5));
-                self.cycles += 8;          
+                let data = self.zero_bit_8bit(self.registers.get_a(), 5);
+                self.registers.set_a(data);
             }
             0xB0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 6));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 6);
+                self.registers.set_b(data);
             }
             0xB1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 6));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 6);
+                self.registers.set_c(data);
             }
             0xB2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 6)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 6);
+                self.registers.set_d(data);
             }
             0xB3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 6)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 6);
+                self.registers.set_e(data);
             }
             0xB4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 6));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 6);
+                self.registers.set_h(data);
             }
             0xB5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 6));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 6);
+                self.registers.set_l(data);
             }
             0xB6 =>
             {
@@ -1664,41 +1323,34 @@ impl<'a> CPU<'a> {
             }
             0xB7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 6));
-                self.cycles += 8;          
+                let data = self.zero_bit_8bit(self.registers.get_a(), 6);
+                self.registers.set_a(data);        
             }
             0xB8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & !(1 << 7));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_b(), 7);
+                self.registers.set_b(data);
             }
             0xB9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & !(1 << 7));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_c(), 7);
+                self.registers.set_c(data);
             }
             0xBA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & !(1 << 7)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_d(), 7);
+                self.registers.set_d(data);
             }
             0xBB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & !(1 << 7)); 
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_e(), 7);
+                self.registers.set_e(data);
             }
             0xBC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & !(1 << 7));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_h(), 7);
+                self.registers.set_h(data);;
             }
             0xBD =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & !(1 << 7));
-                self.cycles += 8;
+                let data = self.zero_bit_8bit(self.registers.get_l(), 7);
+                self.registers.set_l(data);
             }
             0xBE =>
             {
@@ -1708,41 +1360,34 @@ impl<'a> CPU<'a> {
             }
             0xBF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & !(1 << 7));
-                self.cycles += 8;          
+                let data = self.zero_bit_8bit(self.registers.get_a(), 7);
+                self.registers.set_a(data);         
             }
             0xC0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 0));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 0);
+                self.registers.set_b(data);
             }
             0xC1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 0));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 0);
+                self.registers.set_c(data);
             }
             0xC2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 0)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 0);
+                self.registers.set_d(data);
             }
             0xC3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 0)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 0);
+                self.registers.set_e(data);
             }
             0xC4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 0));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 0);
+                self.registers.set_h(data);
             }
             0xC5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 0));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 0);
+                self.registers.set_l(data);
             }
             0xC6 =>
             {
@@ -1752,41 +1397,34 @@ impl<'a> CPU<'a> {
             }
             0xC7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 0));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 0);
+                self.registers.set_a(data);       
             }
             0xC8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 1));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 1);
+                self.registers.set_b(data);
             }
             0xC9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 1));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 1);
+                self.registers.set_c(data);
             }
             0xCA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 1)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 1);
+                self.registers.set_d(data);
             }
             0xCB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 1)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 1);
+                self.registers.set_e(data);
             }
             0xCC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 1));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 1);
+                self.registers.set_h(data);
             }
             0xCD =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 1));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 1);
+                self.registers.set_l(data);
             }
             0xCE =>
             {
@@ -1796,41 +1434,34 @@ impl<'a> CPU<'a> {
             }
             0xCF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 1));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 1);
+                self.registers.set_a(data);        
             }
             0xD0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 2));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 2);
+                self.registers.set_b(data);
             }
             0xD1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 2));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 2);
+                self.registers.set_c(data);
             }
             0xD2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 2)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 2);
+                self.registers.set_d(data);
             }
             0xD3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 2)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 2);
+                self.registers.set_e(data);
             }
             0xD4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 2));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 2);
+                self.registers.set_h(data);
             }
             0xD5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 2));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 2);
+                self.registers.set_l(data);
             }
             0xD6 =>
             {
@@ -1840,41 +1471,34 @@ impl<'a> CPU<'a> {
             }
             0xD7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 2));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 2);
+                self.registers.set_a(data);       
             }
             0xD8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 3));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 3);
+                self.registers.set_b(data);
             }
             0xD9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 3));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 3);
+                self.registers.set_c(data);
             }
             0xDA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 3)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 3);
+                self.registers.set_d(data);
             }
             0xDB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 3)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 3);
+                self.registers.set_e(data);
             }
             0xDC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 3));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 3);
+                self.registers.set_h(data);
             }
             0xDD =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 3));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 3);
+                self.registers.set_l(data);
             }
             0xDE =>
             {
@@ -1884,41 +1508,34 @@ impl<'a> CPU<'a> {
             }
             0xDF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 3));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 3);
+                self.registers.set_a(data);         
             }
             0xE0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 4));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 4);
+                self.registers.set_b(data);
             }
             0xE1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 4));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 4);
+                self.registers.set_c(data);
             }
             0xE2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 4)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 4);
+                self.registers.set_d(data);
             }
             0xE3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 4)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 4);
+                self.registers.set_e(data);
             }
             0xE4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 4));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 4);
+                self.registers.set_h(data);
             }
             0xE5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 4));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 4);
+                self.registers.set_l(data);
             }
             0xE6 =>
             {
@@ -1928,41 +1545,34 @@ impl<'a> CPU<'a> {
             }
             0xE7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 4));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 4);
+                self.registers.set_a(data);         
             }
             0xE8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 5));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 5);
+                self.registers.set_b(data); 
             }
             0xE9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 5));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 5);
+                self.registers.set_c(data);
             }
             0xEA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 5)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 5);
+                self.registers.set_d(data);
             }
             0xEB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 5)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 5);
+                self.registers.set_e(data);
             }
             0xEC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 5));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 5);
+                self.registers.set_h(data);
             }
             0xED =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 5));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 5);
+                self.registers.set_l(data);
             }
             0xEE =>
             {
@@ -1972,41 +1582,34 @@ impl<'a> CPU<'a> {
             }
             0xEF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 5));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 5);
+                self.registers.set_a(data);         
             }
             0xF0 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 6));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 6);
+                self.registers.set_b(data);
             }
             0xF1 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 6));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 6);
+                self.registers.set_c(data);
             }
             0xF2 => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 6)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 6);
+                self.registers.set_d(data);
             }
             0xF3 => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 6)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 6);
+                self.registers.set_e(data);
             }
             0xF4 =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 6));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 6);
+                self.registers.set_h(data);
             }
             0xF5 =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 6));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 6);
+                self.registers.set_l(data);
             }
             0xF6 =>
             {
@@ -2016,41 +1619,34 @@ impl<'a> CPU<'a> {
             }
             0xF7 =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 6));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 6);
+                self.registers.set_a(data);         
             }
             0xF8 => {
-                let b = self.registers.get_b();
-                self.registers.set_b(b & (1 << 7));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_b(), 7);
+                self.registers.set_b(data);
             }
             0xF9 => {
-                let c = self.registers.get_c();
-                self.registers.set_c(c & (1 << 7));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_c(), 7);
+                self.registers.set_c(data);
             }
             0xFA => {
-                let data = self.registers.get_d();
-                self.registers.set_d(data & (1 << 7)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_d(), 7);
+                self.registers.set_d(data);
             }
             0xFB => {
-                let data = self.registers.get_e();
-                self.registers.set_e(data & (1 << 7)); 
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_e(), 7);
+                self.registers.set_e(data);
             }
             0xFC =>
             {
-                let data = self.registers.get_h();
-                self.registers.set_h(data & (1 << 7));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_h(), 7);
+                self.registers.set_h(data);
             }
             0xFD =>
             {
-                let data = self.registers.get_l();
-                self.registers.set_l(data & (1 << 7));
-                self.cycles += 8;
+                let data = self.set_bit_8bit(self.registers.get_l(), 7);
+                self.registers.set_l(data);
             }
             0xFE =>
             {
@@ -2060,9 +1656,8 @@ impl<'a> CPU<'a> {
             }
             0xFF =>
             {
-                let data = self.registers.get_a();
-                self.registers.set_a(data & (1 << 7));
-                self.cycles += 8;          
+                let data = self.set_bit_8bit(self.registers.get_a(), 7);
+                self.registers.set_a(data);         
             }
 
             _ => println!("{} Not Implemented", opcode),
@@ -2070,6 +1665,84 @@ impl<'a> CPU<'a> {
 
     }
 
+    fn increment_8_bit(&mut self, data: u8) -> u8
+    {
+        let result = data.wrapping_add(1);
+
+        
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0
+        {
+            f |= FLAGS::Z as u8;
+        }
+        else {
+            f&= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f &= !(FLAGS::N as u8);
+
+        //setting H flag
+
+        if(data & 0x0F) + 1 > 0x0F
+        {
+            f|=(FLAGS::H as u8);
+        }
+        else {
+            f&=!(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f);
+
+        self.cycles+=4;
+        result
+    }
+    fn decrement_8_bit (&mut self, data:u8)-> u8
+    {
+        let result = data.wrapping_sub(1);
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0
+        {
+            f |= FLAGS::Z as u8;
+        }
+        else {
+            f&= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f |= (FLAGS::N as u8);
+
+        //setting H flag
+
+        if(data & 0x0F) + 1 > 0x0F
+        {
+            f|=(FLAGS::H as u8);
+        }
+        else {
+            f&=!(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f);
+
+        self.cycles+=4;
+        result
+    }
+    fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8
+    {
+        self.cycles +=8;
+        value & !(1 << bit)
+    }
+    fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8
+    {
+        self.cycles +=8;
+        value | (1 << bit)
+    }
 }
 
 struct RAM {
