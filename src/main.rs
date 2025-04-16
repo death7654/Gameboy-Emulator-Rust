@@ -1,3 +1,5 @@
+use std::f32::consts::E;
+
 const DISPLAY_HEIGHT: usize = 144;
 const DISPLAY_WIDTH: usize = 160;
 
@@ -216,13 +218,13 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x04 => {
-                let data  = self.increment_8_bit(self.registers.get_b());
+                let data = self.increment_8_bit(self.registers.get_b());
                 self.registers.set_b(data);
             }
             0x05 => {
                 //decrement b
-                let data  = self.decrement_8_bit(self.registers.get_b());
-                self.registers.set_b(data);            
+                let data = self.decrement_8_bit(self.registers.get_b());
+                self.registers.set_b(data);
             }
             0x06 => {
                 //load 1 byte into B
@@ -233,24 +235,29 @@ impl<'a> CPU<'a> {
             0x07 => {
                 let a = self.registers.get_a();
                 let msb = (a & 0b1000_0000) >> 7;
-                let result = (a<<1) | msb;
+                let result = (a << 1) | msb;
 
                 self.registers.set_a(result);
 
                 if result == 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
                 }
-            
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
-            
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
+
                 if msb != 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8));
-                }                
-                self.cycles +=8;
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                }
+                self.cycles += 8;
             }
             0x08 => {
                 //load load sp into the address from ram
@@ -300,14 +307,16 @@ impl<'a> CPU<'a> {
             }
             0x0B => {
                 //decrement BC
-                self.registers.set_bc(self.registers.get_bc().wrapping_sub(1));
+                self.registers
+                    .set_bc(self.registers.get_bc().wrapping_sub(1));
                 self.cycles += 8;
             }
             0x0C => {
-                let data  = self.increment_8_bit(self.registers.get_c());
-                self.registers.set_c(data);            }
+                let data = self.increment_8_bit(self.registers.get_c());
+                self.registers.set_c(data);
+            }
             0x0D => {
-                let data  = self.decrement_8_bit(self.registers.get_c());
+                let data = self.decrement_8_bit(self.registers.get_c());
                 self.registers.set_c(data);
             }
             0x0E => {
@@ -363,11 +372,11 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x14 => {
-                let data  = self.increment_8_bit(self.registers.get_d());
+                let data = self.increment_8_bit(self.registers.get_d());
                 self.registers.set_d(data);
             }
             0x15 => {
-                let data  = self.decrement_8_bit(self.registers.get_d());
+                let data = self.decrement_8_bit(self.registers.get_d());
                 self.registers.set_d(data);
             }
             0x16 => {
@@ -445,12 +454,11 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x1C => {
-                let data  = self.increment_8_bit(self.registers.get_e());
+                let data = self.increment_8_bit(self.registers.get_e());
                 self.registers.set_e(data);
             }
-            0x1d =>
-            {
-                let data  = self.decrement_8_bit(self.registers.get_e());
+            0x1d => {
+                let data = self.decrement_8_bit(self.registers.get_e());
                 self.registers.set_e(data);
             }
             0x1E => {
@@ -515,11 +523,11 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x24 => {
-                let data  = self.increment_8_bit(self.registers.get_h());
+                let data = self.increment_8_bit(self.registers.get_h());
                 self.registers.set_h(data);
             }
             0x25 => {
-                let data  = self.decrement_8_bit(self.registers.get_h());
+                let data = self.decrement_8_bit(self.registers.get_h());
                 self.registers.set_h(data);
             }
             0x26 => {
@@ -622,11 +630,11 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x2C => {
-                let data  = self.increment_8_bit(self.registers.get_l());
+                let data = self.increment_8_bit(self.registers.get_l());
                 self.registers.set_l(data);
             }
             0x2D => {
-                let data  = self.decrement_8_bit(self.registers.get_l());
+                let data = self.decrement_8_bit(self.registers.get_l());
                 self.registers.set_l(data);
             }
             0x2E => {
@@ -637,16 +645,18 @@ impl<'a> CPU<'a> {
             0x2F => {
                 let a = self.registers.get_a();
                 self.registers.set_a(!a); // Bitwise complement
-            
+
                 // Set N and H flags
-                self.registers.set_f(self.registers.get_f() | FLAGS::N as u8 | FLAGS::H as u8);
-            
+                self.registers
+                    .set_f(self.registers.get_f() | FLAGS::N as u8 | FLAGS::H as u8);
+
                 self.cycles += 4;
             }
             0x30 => {
                 let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
-                    self.registers.set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
+                    self.registers
+                        .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
                     self.cycles += 12;
                 } else {
                     self.cycles += 8;
@@ -677,21 +687,26 @@ impl<'a> CPU<'a> {
                 let value = self.ram.read(address);
                 let result = value.wrapping_add(1);
                 self.ram.write(address, result);
-            
+
                 if result == 0 {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::Z as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
                 }
-            
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8));
-            
+
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8));
+
                 if (value & 0x0F) + 1 > 0x0F {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
                 }
-            
+
                 self.cycles += 12;
             }
             0x35 => {
@@ -730,22 +745,22 @@ impl<'a> CPU<'a> {
                 self.cycles += 12;
             }
             0x37 => {
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
 
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
-
-                self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+                self.registers
+                    .set_f(self.registers.get_f() | FLAGS::C as u8);
 
                 self.cycles += 4;
             }
             0x38 => {
                 let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
-                if self.registers.get_f() & FLAGS::C as u8 != 0
-                {
-                    self.registers.set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
-                    self.cycles +=12;
-                }
-                else {
-                    self.cycles +=8;
+                if self.registers.get_f() & FLAGS::C as u8 != 0 {
+                    self.registers
+                        .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
+                    self.cycles += 12;
+                } else {
+                    self.cycles += 8;
                 }
             }
             0x39 => {
@@ -755,16 +770,20 @@ impl<'a> CPU<'a> {
                 self.registers.set_hl(result);
 
                 if (hl & 0xFFF) + (sp & 0xFFF) > 0xFFF {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::H as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::H as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::H as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
                 }
-            
+
                 // Set C flag if carry occurs from bit 15 to bit 16
                 if hl > 0xFFFF - sp {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8);
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8);
                 } else {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
                 }
 
                 self.cycles += 8;
@@ -783,11 +802,11 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x3C => {
-                let data  = self.increment_8_bit(self.registers.get_a());
+                let data = self.increment_8_bit(self.registers.get_a());
                 self.registers.set_a(data);
             }
             0x3D => {
-                let data  = self.decrement_8_bit(self.registers.get_a());
+                let data = self.decrement_8_bit(self.registers.get_a());
                 self.registers.set_a(data);
             }
             0x3E => {
@@ -796,14 +815,17 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x3F => {
-                self.registers.set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
+                self.registers
+                    .set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
 
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
-                    self.registers.set_f(self.registers.get_f() & !(FLAGS::C as u8)); // Clear Carry
+                    self.registers
+                        .set_f(self.registers.get_f() & !(FLAGS::C as u8)); // Clear Carry
                 } else {
-                    self.registers.set_f(self.registers.get_f() | FLAGS::C as u8); // Set Carry
+                    self.registers
+                        .set_f(self.registers.get_f() | FLAGS::C as u8); // Set Carry
                 }
-                self.cycles +=4;
+                self.cycles += 4;
             }
             0x40 => {
                 self.cycles += 4;
@@ -1068,6 +1090,843 @@ impl<'a> CPU<'a> {
                 self.cycles += 4;
             }
             0x80 => {
+                self.add_8bit(self.registers.get_b());
+            }
+            0x81 => {
+                self.add_8bit(self.registers.get_c());
+            }
+            0x82 => {
+                self.add_8bit(self.registers.get_d());
+            }
+            0x83 => {
+                self.add_8bit(self.registers.get_e());
+            }
+            0x84 => {
+                self.add_8bit(self.registers.get_h());
+            }
+            0x85 => {
+                self.add_8bit(self.registers.get_l());
+            }
+            0x86 => {
+                self.add_8bit(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0x87 => {
+                self.add_8bit(self.registers.get_a());
+            }
+            0x88 => {
+                self.add_with_carry(self.registers.get_b());
+            }
+            0x89 => {
+                self.add_with_carry(self.registers.get_c());
+            }
+            0x8A => {
+                self.add_with_carry(self.registers.get_d());
+            }
+            0x8B => {
+                self.add_with_carry(self.registers.get_e());
+            }
+            0x8C => {
+                self.add_with_carry(self.registers.get_h());
+            }
+            0x8D => {
+                self.add_with_carry(self.registers.get_l());
+            }
+            0x8E => {
+                self.add_with_carry(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0x8F => {
+                self.add_with_carry(self.registers.get_a());
+            }
+            0x90 => {
+                self.sub_8bit(self.registers.get_b());
+            }
+            0x91 => {
+                self.sub_8bit(self.registers.get_c());
+            }
+            0x92 => {
+                self.sub_8bit(self.registers.get_d());
+            }
+            0x93 => {
+                self.sub_8bit(self.registers.get_e());
+            }
+            0x94 => {
+                self.sub_8bit(self.registers.get_h());
+            }
+            0x95 => {
+                self.sub_8bit(self.registers.get_l());
+            }
+            0x96 => {
+                self.sub_8bit(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0x97 => {
+                self.sub_8bit(self.registers.get_a());
+                let mut f = self.registers.get_f() | (FLAGS::Z as u8 | FLAGS::N as u8);
+                f &= !(FLAGS::H as u8 | FLAGS::C as u8);
+                self.registers.set_f(f);
+            }
+            0x98 => {
+                self.sub_with_carry(self.registers.get_b());
+            }
+            0x99 => {
+                self.sub_with_carry(self.registers.get_c());
+            }
+            0x9A => {
+                self.sub_with_carry(self.registers.get_d());
+            }
+            0x9B => {
+                self.sub_with_carry(self.registers.get_e());
+            }
+            0x9C => {
+                self.sub_with_carry(self.registers.get_h());
+            }
+            0x9D => {
+                self.sub_with_carry(self.registers.get_l());
+            }
+            0x9E => {
+                self.sub_with_carry(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0x9F => {
+                let a = self.registers.get_a();
+                let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
+
+                let (temp_result, _) = a.overflowing_sub(a);
+                let (result, _) = temp_result.overflowing_sub(carry); // Subtract carry
+
+                self.registers.set_a(result);
+
+                let mut f = self.registers.get_f() | FLAGS::N as u8;
+
+                if result == 0 {
+                    f |= FLAGS::Z as u8;
+                } else {
+                    f &= !(FLAGS::Z as u8)
+                }
+
+                if (a & 0x0F).wrapping_sub(a & 0x0F).wrapping_sub(carry) > 0x0F {
+                    f |= FLAGS::H as u8;
+                } else {
+                    f &= !(FLAGS::H as u8)
+                }
+
+                self.registers.set_f(f);
+                self.cycles += 4;
+            }
+            0xA0 => {
+                self.and(self.registers.get_b());
+            }
+            0xA1 => {
+                self.and(self.registers.get_c());
+            }
+            0xA2 => {
+                self.and(self.registers.get_d());
+            }
+            0xA3 => {
+                self.and(self.registers.get_e());
+            }
+            0xA4 => {
+                self.and(self.registers.get_h());
+            }
+            0xA5 => {
+                self.and(self.registers.get_l());
+            }
+            0xA6 => {
+                self.and(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0xA7 => {
+                self.and(self.registers.get_a());
+            }
+            0xA8 => {
+                self.XOR(self.registers.get_b());
+            }
+            0xA9 => {
+                self.XOR(self.registers.get_c());
+            }
+            0xAA => {
+                self.XOR(self.registers.get_d());
+            }
+            0xAB => {
+                self.XOR(self.registers.get_e());
+            }
+            0xAC => {
+                self.XOR(self.registers.get_h());
+            }
+            0xAD => {
+                self.XOR(self.registers.get_l());
+            }
+            0xAE => {
+                self.XOR(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0xAF => {
+                self.XOR(self.registers.get_a());
+                self.registers
+                    .set_f(self.registers.get_f() | (FLAGS::Z as u8));
+            }
+            0xB0 => {
+                self.OR(self.registers.get_b());
+            }
+            0xB1 => {
+                self.OR(self.registers.get_c());
+            }
+            0xB2 => {
+                self.OR(self.registers.get_d());
+            }
+            0xB3 => {
+                self.OR(self.registers.get_e());
+            }
+            0xB4 => {
+                self.OR(self.registers.get_h());
+            }
+            0xB5 => {
+                self.OR(self.registers.get_l());
+            }
+            0xB6 => {
+                self.OR(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0xB7 => {
+                self.OR(self.registers.get_a());
+            }
+            0xB8 => {
+                self.compare(self.registers.get_b());
+            }
+            0xB9 => {
+                self.compare(self.registers.get_c());
+            }
+            0xBA => {
+                self.compare(self.registers.get_d());
+            }
+            0xBB => {
+                self.compare(self.registers.get_e());
+            }
+            0xBC => {
+                self.compare(self.registers.get_h());
+            }
+            0xBD => {
+                self.compare(self.registers.get_l());
+            }
+            0xBE => {
+                self.compare(self.ram.read(self.registers.get_hl()));
+                self.cycles += 4;
+            }
+            0xBF => {
+                self.compare(self.registers.get_a());
+                let mut f = self.registers.get_f() & !(FLAGS::H as u8 | FLAGS::C as u8);
+                f |= (FLAGS::Z as u8 | FLAGS::N as u8);
+                self.registers.set_f(f);
+            }
+            0xC0 => {
+                if self.registers.get_f() & FLAGS::Z as u8 == 0 {
+                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                    let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                    self.registers.set_pc(address);
+
+                    self.cycles += 20;
+                } else {
+                    self.cycles += 8;
+                }
+            }
+            0xC1 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let value = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_bc(value);
+
+                self.cycles += 12;
+            }
+            0xC2 => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                if self.registers.get_f() & FLAGS::Z as u8 == 0 {
+                    self.registers.set_pc(address);
+                    self.cycles += 16;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xC3 => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_pc(address);
+                self.cycles += 16;
+            }
+            0xC4 => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::Z as u8 == 0 {
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() >> 8) as u8,
+                    );
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() & 0xFF) as u8,
+                    );
+
+                    self.registers.set_pc(address);
+
+                    self.cycles += 24;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xC5 => {
+                let bc = self.registers.get_bc();
+
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (bc >> 8) as u8);
+
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (bc & 0xFF) as u8);
+
+                self.cycles += 16;
+            }
+            0xC6 => {
+                let data = self.ram.read(self.registers.get_and_inc_pc());
+                self.add_8bit(data);
+                self.cycles += 8;
+            }
+            0xC7 => {
+                self.reset(0x00);
+            }
+            0xC8 => {
+                if self.registers.get_f() & FLAGS::Z as u8 != 0 {
+                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                    let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                    self.registers.set_pc(address);
+
+                    self.cycles += 20;
+                } else {
+                    self.cycles += 8;
+                }
+            }
+            0xC9 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_pc(address);
+
+                self.cycles += 16;
+            }
+            0xCA => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::Z as u8 != 0 {
+                    self.registers.set_pc(address);
+
+                    self.cycles += 16;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xCB => {
+                let opcode = self.fetch();
+                self.cb(opcode);
+            }
+            0xCC => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::Z as u8 != 0 {
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() >> 8) as u8,
+                    );
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() & 0xFF) as u8,
+                    );
+
+                    self.registers.set_pc(address);
+
+                    self.cycles += 24;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xCD => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(
+                    self.registers.get_sp(),
+                    (self.registers.get_pc() >> 8) as u8,
+                );
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(
+                    self.registers.get_sp(),
+                    (self.registers.get_pc() & 0xFF) as u8,
+                );
+
+                self.registers.set_pc(address);
+
+                self.cycles += 24;
+            }
+            0xCE => {
+                let data = self.ram.read(self.registers.get_and_inc_pc());
+                self.add_with_carry(data);
+                self.cycles += 4;
+            }
+            0xCF => {
+                self.reset(0x08);
+            }
+            0xD0 => {
+                if self.registers.get_f() & FLAGS::C as u8 == 0 {
+                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                    let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                    self.registers.set_pc(address);
+
+                    self.cycles += 20;
+                } else {
+                    self.cycles += 8;
+                }
+            }
+            0xD1 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let value = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_de(value);
+
+                self.cycles += 12
+            }
+            0xD2 => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::C as u8 == 0 {
+                    self.registers.set_pc(address);
+                    self.cycles += 16;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xD3 => {
+                println!("D3 NOT VALID");
+                self.cycles += 4;
+            }
+            0xD4 => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::C as u8 == 0 {
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() >> 8) as u8,
+                    );
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() & 0xFF) as u8,
+                    );
+
+                    self.registers.set_pc(address);
+
+                    self.cycles += 24;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xD5 => {
+                let de = self.registers.get_de();
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (de >> 8) as u8);
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (de & 0xFF) as u8);
+                self.cycles += 16;
+            }
+            0xD6 => {
+                let address = self.registers.get_and_inc_pc();
+                self.sub_8bit(self.ram.read(address));
+                self.cycles += 4;
+            }
+            0xD7 => {
+                self.reset(0x10);
+            }
+            0xD8 => {
+                if self.registers.get_f() & FLAGS::C as u8 != 0 {
+                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                    let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                    self.registers.set_pc(address);
+
+                    self.cycles += 20;
+                } else {
+                    self.cycles += 8;
+                }
+            }
+            0xD9 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_pc(address);
+
+                self.ime = true;
+                self.cycles += 16;
+            }
+            0xDA => {
+                let lower = self.ram.read(self.registers.get_and_inc_pc());
+                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper as u16) << 8) | lower as u16;
+                if self.registers.get_f() & FLAGS::C as u8 != 0 {
+                    self.registers.set_pc(address);
+                    self.cycles += 16;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xDB => {
+                println!("DB ILLEGAL");
+                self.cycles += 4;
+            }
+            0xDC => {
+                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper_byte as u16) << 8) | lower_byte as u16;
+
+                if self.registers.get_f() & FLAGS::C as u8 != 0 {
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() >> 8) as u8,
+                    );
+                    self.registers
+                        .set_sp(self.registers.get_sp().wrapping_sub(1));
+                    self.ram.write(
+                        self.registers.get_sp(),
+                        (self.registers.get_pc() & 0xFF) as u8,
+                    );
+
+                    self.registers.set_pc(address);
+
+                    self.cycles += 24;
+                } else {
+                    self.cycles += 12;
+                }
+            }
+            0xDD => {
+                println!("ILLEGAL_DD");
+                self.cycles += 4;
+            }
+            0xDE => {
+                let data = self.ram.read(self.registers.get_and_inc_pc());
+                self.sub_with_carry(data);
+                self.cycles += 4;
+            }
+            0xDF => {
+                self.reset(0x18);
+            }
+            0xE0 => {
+                let offset = self.ram.read(self.registers.get_and_inc_pc());
+                let address = 0xFF00 | (offset as u16);
+
+                self.ram.write(address, self.registers.get_a());
+
+                self.cycles += 12;
+            }
+            0xE1 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let value = ((upper_byte as u16) << 8) | lower_byte as u16;
+                self.registers.set_hl(value);
+
+                self.cycles += 12;
+            }
+            0xE2 => {
+                let address = 0xff00 | self.registers.get_c() as u16;
+                self.ram.write(address, self.registers.get_a());
+
+                self.cycles += 8;
+            }
+            0xE3 => {
+                print!("E3 is Illegal");
+                self.cycles += 4;
+            }
+            0xE4 => {
+                print!("E4 is Illegal");
+                self.cycles += 4;
+            }
+            0xE5 => {
+                let hl = self.registers.get_hl();
+
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (hl >> 8) as u8);
+
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (hl & 0xFF) as u8);
+
+                self.cycles += 16;
+            }
+            0xE6 => {
+                let address = self.registers.get_and_inc_pc();
+                self.and(self.ram.read(address));
+            }
+            0xE7 => {
+                self.reset(0x20);
+            }
+            0xE8 => {
+                let sp = self.registers.get_sp();
+                let e8 = self.ram.read(self.registers.get_and_inc_pc()) as i8; // Read signed immediate value
+
+                let result = sp.wrapping_add(e8 as u16);
+                self.registers.set_sp(result);
+
+                let mut f = 0;
+
+                if (sp & 0x0F) + (e8 as u16 & 0x0F) > 0x0F {
+                    f |= FLAGS::H as u8;
+                }
+
+                if (sp & 0xFF) + (e8 as u16 & 0xFF) > 0xFF {
+                    f |= FLAGS::C as u8;
+                }
+
+                self.registers.set_f(f);
+                self.cycles += 16;
+            }
+            0xE9 => {
+                self.registers.set_pc(self.registers.get_hl());
+            }
+            0xEA => {
+                let lower = self.ram.read(self.registers.get_and_inc_pc());
+                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let address = (upper as u16) << 8 | lower as u16;
+
+                self.ram.write(address, self.registers.get_a());
+                self.cycles += 16;
+            }
+            0xEB => {
+                println!("EB ILLEGAL");
+                self.cycles += 4;
+            }
+            0xEC => {
+                println!("EC ILLEGAL");
+                self.cycles += 4;
+            }
+            0xED => {
+                println!("ED ILLEGAL");
+                self.cycles += 4;
+            }
+            0xEE => {
+                let data = self.ram.read(self.registers.get_and_inc_pc());
+                self.XOR(data);
+            }
+            0xEF => {
+                self.reset(0x28);
+            }
+            0xF0 => {
+                let offset = self.ram.read(self.registers.get_and_inc_pc());
+                let address = 0xFF00 | (offset as u16);
+
+                let value = self.ram.read(address);
+                self.registers.set_a(value);
+
+                self.cycles += 12;
+            }
+            0xF1 => {
+                let lower_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+                let upper_byte = self.ram.read(self.registers.get_sp());
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_add(1));
+
+                let value = ((upper_byte as u16) << 8) | (lower_byte & 0xF0) as u16;
+                self.registers.set_af(value);
+
+                self.cycles += 12;
+            }
+            0xF2 => {
+                let address = 0xFF00 | self.registers.get_c() as u16;
+                let data = self.ram.read(address);
+                self.registers.set_a(data);
+                self.cycles += 8;
+            }
+            0xF3 => {
+                self.ime = false;
+                self.cycles += 4;
+            }
+            0xF4 => {
+                println!("ILLEGAL F4");
+                self.cycles += 4;
+            }
+            0xF5 => {
+                let af = self.registers.get_af();
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (af >> 8) as u8);
+                self.registers
+                    .set_sp(self.registers.get_sp().wrapping_sub(1));
+                self.ram.write(self.registers.get_sp(), (0xFF & af) as u8);
+
+                self.cycles += 16;
+            }
+            0xF6 => {
+                let data = self.ram.read(self.registers.get_and_inc_pc());
+                self.OR(data);
+            }
+            0xF7 => {
+                self.reset(0x30);
+            }
+            0xF8 => {
+                let sp = self.registers.get_sp();
+                let e8 = self.ram.read(self.registers.get_and_inc_pc()) as i8; // Signed immediate value
+
+                let result = sp.wrapping_add(e8 as u16);
+                self.registers.set_hl(result);
+
+                let mut f = 0;
+
+                if (sp & 0x0F) + (e8 as u16 & 0x0F) > 0x0F {
+                    f |= FLAGS::H as u8;
+                }
+
+                if (sp & 0xFF) + (e8 as u16 & 0xFF) > 0xFF {
+                    f |= FLAGS::C as u8;
+                }
+
+                self.registers.set_f(f);
+                self.cycles += 12;
+            }
+            0xF9 => {
+                self.registers.set_sp(self.registers.get_hl());
+                self.cycles += 8;
+            }
+            0xFA => {
+                let lower = self.ram.read(self.registers.get_and_inc_pc());
+                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let address = ((upper as u16) << 8) | lower as u16;
+
+                self.registers.set_a(self.ram.read(address));
+                self.cycles += 16;
+            }
+            0xFB => {
+                self.ime = true;
+                self.cycles += 4;
+            }
+            0xFC => {
+                println!("FC ILLEGAL");
+                self.cycles += 4;
+            }
+            0xFD => {
+                println!("FD ILLEGAL");
+                self.cycles += 4;
+            }
+            0xFE => {
+                let a = self.registers.get_a();
+                let n8 = self.ram.read(self.registers.get_and_inc_pc());
+
+                let (result, borrow) = a.overflowing_sub(n8);
+
+                let mut f = FLAGS::N as u8;
+                if result == 0 {
+                    f |= FLAGS::Z as u8;
+                }
+
+                if (a & 0x0F) < (n8 & 0x0F) {
+                    f |= FLAGS::H as u8;
+                }
+
+                if borrow {
+                    f |= FLAGS::C as u8;
+                }
+
+                self.registers.set_f(f);
+                self.cycles += 8;
+            }
+            0xFF => {
+                self.reset(0x38);
+            }
+            _ => println!("{} Not Implemented", opcode),
+        }
+    }
+    fn cb(&mut self, opcode: u8) {
+        match opcode {
+            //todo 0x00 -> 0x7f
+            0x80 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 0);
                 self.registers.set_b(data);
             }
@@ -1083,24 +1942,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 0);
                 self.registers.set_e(data);
             }
-            0x84 =>
-            {
+            0x84 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 0);
                 self.registers.set_h(data);
             }
-            0x85 =>
-            {
+            0x85 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 0);
                 self.registers.set_l(data);
             }
-            0x86 =>
-            {
+            0x86 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 0)); 
+                self.registers.set_hl(data & !(1 << 0));
                 self.cycles += 16;
             }
-            0x87 =>
-            {
+            0x87 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 0);
                 self.registers.set_a(data);
             }
@@ -1120,24 +1975,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 1);
                 self.registers.set_e(data);
             }
-            0x8C =>
-            {
+            0x8C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
             }
-            0x8D =>
-            {
+            0x8D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
             }
-            0x8E =>
-            {
+            0x8E => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 1)); 
+                self.registers.set_hl(data & !(1 << 1));
                 self.cycles += 16;
             }
-            0x8F =>
-            {
+            0x8F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 1);
                 self.registers.set_a(data);
             }
@@ -1157,24 +2008,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
             }
-            0x94 =>
-            {
+            0x94 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
             }
-            0x95 =>
-            {
+            0x95 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
             }
-            0x96 =>
-            {
+            0x96 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 2)); 
+                self.registers.set_hl(data & !(1 << 2));
                 self.cycles += 16;
             }
-            0x97 =>
-            {
+            0x97 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 2);
                 self.registers.set_a(data);
             }
@@ -1194,24 +2041,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
             }
-            0x9C =>
-            {
+            0x9C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
             }
-            0x9D =>
-            {
+            0x9D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
             }
-            0x9E =>
-            {
+            0x9E => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 3)); 
+                self.registers.set_hl(data & !(1 << 3));
                 self.cycles += 16;
             }
-            0x9F =>
-            {
+            0x9F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 3);
                 self.registers.set_a(data);
             }
@@ -1231,24 +2074,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 4);
                 self.registers.set_e(data);
             }
-            0xA4 =>
-            {
+            0xA4 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 4);
                 self.registers.set_h(data);
             }
-            0xA5 =>
-            {
+            0xA5 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 4);
                 self.registers.set_l(data);
             }
-            0xA6 =>
-            {
+            0xA6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 4)); 
+                self.registers.set_hl(data & !(1 << 4));
                 self.cycles += 16;
             }
-            0xA7 =>
-            {
+            0xA7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 4);
                 self.registers.set_a(data);
             }
@@ -1268,24 +2107,20 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 5);
                 self.registers.set_e(data);
             }
-            0xAC =>
-            {
+            0xAC => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 5);
                 self.registers.set_h(data);
             }
-            0xAD =>
-            {
+            0xAD => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 5);
                 self.registers.set_l(data);
             }
-            0xAE =>
-            {
+            0xAE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 5)); 
+                self.registers.set_hl(data & !(1 << 5));
                 self.cycles += 16;
             }
-            0xAF =>
-            {
+            0xAF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 5);
                 self.registers.set_a(data);
             }
@@ -1305,26 +2140,22 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 6);
                 self.registers.set_e(data);
             }
-            0xB4 =>
-            {
+            0xB4 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 6);
                 self.registers.set_h(data);
             }
-            0xB5 =>
-            {
+            0xB5 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 6);
                 self.registers.set_l(data);
             }
-            0xB6 =>
-            {
+            0xB6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 6)); 
+                self.registers.set_hl(data & !(1 << 6));
                 self.cycles += 16;
             }
-            0xB7 =>
-            {
+            0xB7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 6);
-                self.registers.set_a(data);        
+                self.registers.set_a(data);
             }
             0xB8 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 7);
@@ -1342,26 +2173,22 @@ impl<'a> CPU<'a> {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 7);
                 self.registers.set_e(data);
             }
-            0xBC =>
-            {
+            0xBC => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 7);
-                self.registers.set_h(data);;
+                self.registers.set_h(data);
             }
-            0xBD =>
-            {
+            0xBD => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 7);
                 self.registers.set_l(data);
             }
-            0xBE =>
-            {
+            0xBE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 7)); 
+                self.registers.set_hl(data & !(1 << 7));
                 self.cycles += 16;
             }
-            0xBF =>
-            {
+            0xBF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 7);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
             0xC0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 0);
@@ -1379,26 +2206,22 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 0);
                 self.registers.set_e(data);
             }
-            0xC4 =>
-            {
+            0xC4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 0);
                 self.registers.set_h(data);
             }
-            0xC5 =>
-            {
+            0xC5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 0);
                 self.registers.set_l(data);
             }
-            0xC6 =>
-            {
+            0xC6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 0)); 
+                self.registers.set_hl(data & (1 << 0));
                 self.cycles += 16;
             }
-            0xC7 =>
-            {
+            0xC7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 0);
-                self.registers.set_a(data);       
+                self.registers.set_a(data);
             }
             0xC8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 1);
@@ -1413,29 +2236,24 @@ impl<'a> CPU<'a> {
                 self.registers.set_d(data);
             }
             0xCB => {
-                let data = self.set_bit_8bit(self.registers.get_e(), 1);
-                self.registers.set_e(data);
+                //todo
             }
-            0xCC =>
-            {
+            0xCC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
             }
-            0xCD =>
-            {
+            0xCD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
             }
-            0xCE =>
-            {
+            0xCE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 1)); 
+                self.registers.set_hl(data & (1 << 1));
                 self.cycles += 16;
             }
-            0xCF =>
-            {
+            0xCF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 1);
-                self.registers.set_a(data);        
+                self.registers.set_a(data);
             }
             0xD0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 2);
@@ -1453,26 +2271,22 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
             }
-            0xD4 =>
-            {
+            0xD4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
             }
-            0xD5 =>
-            {
+            0xD5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
             }
-            0xD6 =>
-            {
+            0xD6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 2)); 
+                self.registers.set_hl(data & (1 << 2));
                 self.cycles += 16;
             }
-            0xD7 =>
-            {
+            0xD7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 2);
-                self.registers.set_a(data);       
+                self.registers.set_a(data);
             }
             0xD8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 3);
@@ -1490,26 +2304,22 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
             }
-            0xDC =>
-            {
+            0xDC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
             }
-            0xDD =>
-            {
+            0xDD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
             }
-            0xDE =>
-            {
+            0xDE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 3)); 
+                self.registers.set_hl(data & (1 << 3));
                 self.cycles += 16;
             }
-            0xDF =>
-            {
+            0xDF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 3);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
             0xE0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 4);
@@ -1527,30 +2337,26 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 4);
                 self.registers.set_e(data);
             }
-            0xE4 =>
-            {
+            0xE4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 4);
                 self.registers.set_h(data);
             }
-            0xE5 =>
-            {
+            0xE5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 4);
                 self.registers.set_l(data);
             }
-            0xE6 =>
-            {
+            0xE6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 4)); 
+                self.registers.set_hl(data & (1 << 4));
                 self.cycles += 16;
             }
-            0xE7 =>
-            {
+            0xE7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 4);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
             0xE8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 5);
-                self.registers.set_b(data); 
+                self.registers.set_b(data);
             }
             0xE9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 5);
@@ -1564,26 +2370,22 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 5);
                 self.registers.set_e(data);
             }
-            0xEC =>
-            {
+            0xEC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 5);
                 self.registers.set_h(data);
             }
-            0xED =>
-            {
+            0xED => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 5);
                 self.registers.set_l(data);
             }
-            0xEE =>
-            {
+            0xEE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 <<5)); 
+                self.registers.set_hl(data & (1 << 5));
                 self.cycles += 16;
             }
-            0xEF =>
-            {
+            0xEF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 5);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
             0xF0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 6);
@@ -1601,26 +2403,22 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 6);
                 self.registers.set_e(data);
             }
-            0xF4 =>
-            {
+            0xF4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 6);
                 self.registers.set_h(data);
             }
-            0xF5 =>
-            {
+            0xF5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 6);
                 self.registers.set_l(data);
             }
-            0xF6 =>
-            {
+            0xF6 => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 6)); 
+                self.registers.set_hl(data & (1 << 6));
                 self.cycles += 16;
             }
-            0xF7 =>
-            {
+            0xF7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 6);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
             0xF8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 7);
@@ -1638,47 +2436,39 @@ impl<'a> CPU<'a> {
                 let data = self.set_bit_8bit(self.registers.get_e(), 7);
                 self.registers.set_e(data);
             }
-            0xFC =>
-            {
+            0xFC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 7);
                 self.registers.set_h(data);
             }
-            0xFD =>
-            {
+            0xFD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 7);
                 self.registers.set_l(data);
             }
-            0xFE =>
-            {
+            0xFE => {
                 let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 7)); 
+                self.registers.set_hl(data & (1 << 7));
                 self.cycles += 16;
             }
-            0xFF =>
-            {
+            0xFF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 7);
-                self.registers.set_a(data);         
+                self.registers.set_a(data);
             }
-
-            _ => println!("{} Not Implemented", opcode),
+            _ => {
+                println!("Special Case CB OPCODE: {} not implemented", opcode);
+            }
         }
-
     }
 
-    fn increment_8_bit(&mut self, data: u8) -> u8
-    {
+    fn increment_8_bit(&mut self, data: u8) -> u8 {
         let result = data.wrapping_add(1);
 
-        
         let mut f = self.registers.get_f();
 
         //setting Z flag
-        if result == 0
-        {
+        if result == 0 {
             f |= FLAGS::Z as u8;
-        }
-        else {
-            f&= !(FLAGS::Z as u8);
+        } else {
+            f &= !(FLAGS::Z as u8);
         }
 
         //setting N flag
@@ -1687,31 +2477,26 @@ impl<'a> CPU<'a> {
 
         //setting H flag
 
-        if(data & 0x0F) + 1 > 0x0F
-        {
-            f|=(FLAGS::H as u8);
-        }
-        else {
-            f&=!(FLAGS::H as u8);
+        if (data & 0x0F) + 1 > 0x0F {
+            f |= (FLAGS::H as u8);
+        } else {
+            f &= !(FLAGS::H as u8);
         }
 
         self.registers.set_f(f);
 
-        self.cycles+=4;
+        self.cycles += 4;
         result
     }
-    fn decrement_8_bit (&mut self, data:u8)-> u8
-    {
+    fn decrement_8_bit(&mut self, data: u8) -> u8 {
         let result = data.wrapping_sub(1);
         let mut f = self.registers.get_f();
 
         //setting Z flag
-        if result == 0
-        {
+        if result == 0 {
             f |= FLAGS::Z as u8;
-        }
-        else {
-            f&= !(FLAGS::Z as u8);
+        } else {
+            f &= !(FLAGS::Z as u8);
         }
 
         //setting N flag
@@ -1720,28 +2505,244 @@ impl<'a> CPU<'a> {
 
         //setting H flag
 
-        if(data & 0x0F) + 1 > 0x0F
-        {
-            f|=(FLAGS::H as u8);
-        }
-        else {
-            f&=!(FLAGS::H as u8);
+        if (data & 0x0F) == 0 {
+            f |= (FLAGS::H as u8);
+        } else {
+            f &= !(FLAGS::H as u8);
         }
 
         self.registers.set_f(f);
 
-        self.cycles+=4;
+        self.cycles += 4;
         result
     }
-    fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8
-    {
-        self.cycles +=8;
+    fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
+        self.cycles += 8;
         value & !(1 << bit)
     }
-    fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8
-    {
-        self.cycles +=8;
+    fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
+        self.cycles += 8;
         value | (1 << bit)
+    }
+
+    fn add_8bit(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let (result, carry) = a.overflowing_add(b); // Separate carry result
+
+        let mut f = (self.registers.get_f() & !(FLAGS::N as u8));
+
+        self.registers.set_a(result);
+        // Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        // H flag
+        if (a & 0x0F) + (b & 0x0F) > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if carry {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+
+    fn add_with_carry(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
+        let (result, carry1) = a.overflowing_add(b);
+        let (result, carry2) = result.overflowing_add(carry);
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        if (a & 0x0F) + (b & 0x0F) + carry > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if carry1 || carry2 {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+    fn sub_8bit(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let (result, borrow) = a.overflowing_sub(b); // Separate carry result
+
+        let mut f = (self.registers.get_f() | (FLAGS::N as u8));
+
+        self.registers.set_a(result);
+        // Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        // H flag
+        if (a & 0x0F) < (b & 0x0F) {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if borrow {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+    fn sub_with_carry(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
+
+        let (temp_result, borrow1) = a.overflowing_sub(b);
+        let (result, borrow2) = temp_result.overflowing_sub(carry); // Subtract carry
+
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() | FLAGS::N as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if (a & 0x0F).wrapping_sub(b & 0x0F).wrapping_sub(carry) > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8)
+        }
+
+        if borrow1 || borrow2 {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+
+    fn and(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a & b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::C as u8);
+        f |= FLAGS::H as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+    fn XOR(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a ^ b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+    fn OR(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a | b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+
+    fn compare(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let (result, borrow) = a.overflowing_sub(b); // Simulates subtraction for flag updates
+
+        let mut f = self.registers.get_f();
+        f |= FLAGS::N as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if (a & 0x0F) < (b & 0x0F) {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8)
+        }
+
+        if borrow {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 4;
+    }
+    fn reset(&mut self, address: u16) {
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram.write(
+            self.registers.get_sp(),
+            (self.registers.get_pc() >> 8) as u8,
+        );
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram.write(
+            self.registers.get_sp(),
+            (self.registers.get_pc() & 0xFF) as u8,
+        );
+
+        self.registers.set_pc(address);
+
+        self.cycles += 16;
     }
 }
 
@@ -1757,6 +2758,9 @@ impl RAM {
     }
     fn write(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
+    }
+    fn reset() -> Self {
+        RAM { memory: [0; 65536] }
     }
 }
 fn main() {
