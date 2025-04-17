@@ -51,7 +51,7 @@ impl<'a> CPU<'a> {
             0x03 => {
                 //increment bc
                 let bc = self.registers.get_bc();
-                self.registers.set_bc((bc.wrapping_add(1)));
+                self.registers.set_bc(bc.wrapping_add(1));
                 self.cycles += 8;
             }
             0x04 => {
@@ -162,7 +162,7 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x0F => {
-                let mut a = self.registers.get_a();
+                let a = self.registers.get_a();
                 let carry = a & 0b0000_0001;
                 let result = (a >> 1) | (carry << 7);
                 self.registers.set_a(result);
@@ -1078,56 +1078,56 @@ impl<'a> CPU<'a> {
                 self.and(self.registers.get_a());
             }
             0xA8 => {
-                self.XOR(self.registers.get_b());
+                self.xor(self.registers.get_b());
             }
             0xA9 => {
-                self.XOR(self.registers.get_c());
+                self.xor(self.registers.get_c());
             }
             0xAA => {
-                self.XOR(self.registers.get_d());
+                self.xor(self.registers.get_d());
             }
             0xAB => {
-                self.XOR(self.registers.get_e());
+                self.xor(self.registers.get_e());
             }
             0xAC => {
-                self.XOR(self.registers.get_h());
+                self.xor(self.registers.get_h());
             }
             0xAD => {
-                self.XOR(self.registers.get_l());
+                self.xor(self.registers.get_l());
             }
             0xAE => {
-                self.XOR(self.ram.read(self.registers.get_hl()));
+                self.xor(self.ram.read(self.registers.get_hl()));
                 self.cycles += 4;
             }
             0xAF => {
-                self.XOR(self.registers.get_a());
+                self.xor(self.registers.get_a());
                 self.registers
                     .set_f(self.registers.get_f() | (FLAGS::Z as u8));
             }
             0xB0 => {
-                self.OR(self.registers.get_b());
+                self.or(self.registers.get_b());
             }
             0xB1 => {
-                self.OR(self.registers.get_c());
+                self.or(self.registers.get_c());
             }
             0xB2 => {
-                self.OR(self.registers.get_d());
+                self.or(self.registers.get_d());
             }
             0xB3 => {
-                self.OR(self.registers.get_e());
+                self.or(self.registers.get_e());
             }
             0xB4 => {
-                self.OR(self.registers.get_h());
+                self.or(self.registers.get_h());
             }
             0xB5 => {
-                self.OR(self.registers.get_l());
+                self.or(self.registers.get_l());
             }
             0xB6 => {
-                self.OR(self.ram.read(self.registers.get_hl()));
+                self.or(self.ram.read(self.registers.get_hl()));
                 self.cycles += 4;
             }
             0xB7 => {
-                self.OR(self.registers.get_a());
+                self.or(self.registers.get_a());
             }
             0xB8 => {
                 self.compare(self.registers.get_b());
@@ -1154,7 +1154,7 @@ impl<'a> CPU<'a> {
             0xBF => {
                 self.compare(self.registers.get_a());
                 let mut f = self.registers.get_f() & !(FLAGS::H as u8 | FLAGS::C as u8);
-                f |= (FLAGS::Z as u8 | FLAGS::N as u8);
+                f |= FLAGS::Z as u8 | FLAGS::N as u8;
                 self.registers.set_f(f);
             }
             0xC0 => {
@@ -1629,7 +1629,7 @@ impl<'a> CPU<'a> {
             }
             0xEE => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
-                self.XOR(data);
+                self.xor(data);
             }
             0xEF => {
                 self.reset(0x28);
@@ -1683,7 +1683,7 @@ impl<'a> CPU<'a> {
             }
             0xF6 => {
                 let data = self.ram.read(self.registers.get_and_inc_pc());
-                self.OR(data);
+                self.or(data);
             }
             0xF7 => {
                 self.reset(0x30);
@@ -2684,7 +2684,7 @@ impl<'a> CPU<'a> {
         //setting H flag
 
         if (data & 0x0F) + 1 > 0x0F {
-            f |= (FLAGS::H as u8);
+            f |= FLAGS::H as u8;
         } else {
             f &= !(FLAGS::H as u8);
         }
@@ -2707,12 +2707,12 @@ impl<'a> CPU<'a> {
 
         //setting N flag
 
-        f |= (FLAGS::N as u8);
+        f |= FLAGS::N as u8;
 
         //setting H flag
 
         if (data & 0x0F) == 0 {
-            f |= (FLAGS::H as u8);
+            f |= FLAGS::H as u8;
         } else {
             f &= !(FLAGS::H as u8);
         }
@@ -2735,7 +2735,7 @@ impl<'a> CPU<'a> {
         let a = self.registers.get_a();
         let (result, carry) = a.overflowing_add(b); // Separate carry result
 
-        let mut f = (self.registers.get_f() & !(FLAGS::N as u8));
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8);
 
         self.registers.set_a(result);
         // Z flag
@@ -2795,7 +2795,7 @@ impl<'a> CPU<'a> {
         let a = self.registers.get_a();
         let (result, borrow) = a.overflowing_sub(b); // Separate carry result
 
-        let mut f = (self.registers.get_f() | (FLAGS::N as u8));
+        let mut f = self.registers.get_f() | (FLAGS::N as u8);
 
         self.registers.set_a(result);
         // Z flag
@@ -2871,7 +2871,7 @@ impl<'a> CPU<'a> {
         self.registers.set_f(f);
         self.cycles += 4;
     }
-    fn XOR(&mut self, b: u8) {
+    fn xor(&mut self, b: u8) {
         let a = self.registers.get_a();
         let result = a ^ b;
         self.registers.set_a(result);
@@ -2887,7 +2887,7 @@ impl<'a> CPU<'a> {
         self.registers.set_f(f);
         self.cycles += 4;
     }
-    fn OR(&mut self, b: u8) {
+    fn or(&mut self, b: u8) {
         let a = self.registers.get_a();
         let result = a | b;
         self.registers.set_a(result);
