@@ -4,12 +4,13 @@ use registers::REGISTERS;
 use crate::RAM;
 use registers::FLAGS;
 
-struct CPU<'a> {
-    registers: REGISTERS,
-    ime: bool, //interrupt master enable
-    opcode: u8,
-    cycles: u64,
-    ram: &'a mut RAM,
+pub struct CPU<'a> {
+    pub registers: REGISTERS,
+    pub ime: bool, //interrupt master enable
+    pub opcode: u8,
+    pub cycles: u64,
+    pub ram: &'a mut RAM,
+    pub halted: bool
 }
 impl<'a> CPU<'a> {
     pub fn new(ram: &'a mut RAM) -> Self {
@@ -19,6 +20,7 @@ impl<'a> CPU<'a> {
             opcode: 0,
             cycles: 0,
             ram,
+            halted: false
         }
     }
     pub fn fetch(&mut self) -> u8 {
@@ -27,6 +29,7 @@ impl<'a> CPU<'a> {
         opcode
     }
     pub fn execute(&mut self, opcode: u8) {
+        println!("opcode: {}", opcode);
         match opcode {
             0x00 => {
                 //NOP
@@ -887,7 +890,8 @@ impl<'a> CPU<'a> {
                 self.cycles += 8;
             }
             0x76 => {
-                //halt, not implemented
+                self.halted = true;
+                self.cycles+=4;
             }
             0x77 => {
                 self.ram
@@ -2735,7 +2739,7 @@ impl<'a> CPU<'a> {
         let a = self.registers.get_a();
         let (result, carry) = a.overflowing_add(b); // Separate carry result
 
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8);
+        let mut f = self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
 
         self.registers.set_a(result);
         // Z flag
@@ -2768,7 +2772,7 @@ impl<'a> CPU<'a> {
         let (result, carry1) = a.overflowing_add(b);
         let (result, carry2) = result.overflowing_add(carry);
 
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8);
+        let mut f = self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
 
         if result == 0 {
             f |= FLAGS::Z as u8;
