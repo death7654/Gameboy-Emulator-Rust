@@ -1925,7 +1925,359 @@ impl<'a> CPU<'a> {
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {
-            //todo 0x00 -> 0x7f
+            0x00 => {
+                let data = self.rotate_without_carry(self.registers.get_b(), 0);
+                self.registers.set_b(data);
+            }
+            0x01 => {
+                let data = self.rotate_without_carry(self.registers.get_c(), 0);
+                self.registers.set_c(data);
+            }
+            0x02 => {
+                let data = self.rotate_without_carry(self.registers.get_d(), 0);
+                self.registers.set_d(data);
+            }
+            0x03 => {
+                let data = self.rotate_without_carry(self.registers.get_e(), 0);
+                self.registers.set_e(data);
+            }
+            0x04 => {
+                let data = self.rotate_without_carry(self.registers.get_h(), 0);
+                self.registers.set_h(data);
+            }
+            0x05 => {
+                let data = self.rotate_without_carry(self.registers.get_l(), 0);
+                self.registers.set_l(data);
+            }
+            0x06 => {
+                let data = self.rotate_without_carry(self.ram.read(self.registers.get_hl()), 0);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x07 => {
+                let data = self.rotate_without_carry(self.registers.get_a(), 0);
+                self.registers.set_a(data);
+            }
+            0x08 => {
+                let data = self.rotate_without_carry(self.registers.get_b(), 1);
+                self.registers.set_b(data);
+            }
+            0x09 => {
+                let data = self.rotate_without_carry(self.registers.get_c(), 1);
+                self.registers.set_c(data);
+            }
+            0x0A => {
+                let data = self.rotate_without_carry(self.registers.get_d(), 1);
+                self.registers.set_d(data);
+            }
+            0x0B => {
+                let data = self.rotate_without_carry(self.registers.get_e(), 1);
+                self.registers.set_e(data);
+            }
+            0x0C => {
+                let data = self.rotate_without_carry(self.registers.get_h(), 1);
+                self.registers.set_h(data);
+            }
+            0x0D => {
+                let data = self.rotate_without_carry(self.registers.get_l(), 1);
+                self.registers.set_l(data);
+            }
+            0x0E => {
+                let data = self.rotate_without_carry(self.ram.read(self.registers.get_hl()), 1);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x0F => {
+                let data = self.rotate_without_carry(self.registers.get_a(), 1);
+                self.registers.set_a(data);
+            }
+            0x10 => {
+                let data = self.rotate(self.registers.get_b(), 0);
+                self.registers.set_b(data);
+            }
+            0x11 => {
+                let data = self.rotate(self.registers.get_c(), 0);
+                self.registers.set_c(data);
+            }
+            0x12 => {
+                let data = self.rotate(self.registers.get_d(), 0);
+                self.registers.set_d(data);
+            }
+            0x13 => {
+                let data = self.rotate(self.registers.get_e(), 0);
+                self.registers.set_e(data);
+            }
+            0x14 => {
+                let data = self.rotate(self.registers.get_h(), 0);
+                self.registers.set_h(data);
+            }
+            0x15 => {
+                let data = self.rotate(self.registers.get_l(), 0);
+                self.registers.set_l(data);
+            }
+            0x16 => {
+                let data = self.rotate(self.ram.read(self.registers.get_hl()), 0);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x17 => {
+                let data = self.rotate(self.registers.get_a(), 0);
+                self.registers.set_a(data);
+            }
+            0x18 => {
+                let data = self.rotate(self.registers.get_b(), 1);
+                self.registers.set_b(data);
+            }
+            0x19 => {
+                let data = self.rotate(self.registers.get_c(), 1);
+                self.registers.set_c(data);
+            }
+            0x1A => {
+                let data = self.rotate(self.registers.get_d(), 1);
+                self.registers.set_d(data);
+            }
+            0x1B => {
+                let data = self.rotate(self.registers.get_e(), 1);
+                self.registers.set_e(data);
+            }
+            0x1C => {
+                let data = self.rotate(self.registers.get_h(), 1);
+                self.registers.set_h(data);
+            }
+            0x1D => {
+                let data = self.rotate(self.registers.get_l(), 1);
+                self.registers.set_l(data);
+            }
+            0x1E => {
+                let data = self.rotate(self.ram.read(self.registers.get_hl()), 1);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x1F => {
+                let data = self.rotate(self.registers.get_a(), 1);
+                self.registers.set_a(data);
+            }
+            0x20 => {
+                let data = self.shift(self.registers.get_b(), 0);
+                self.registers.set_b(data);
+            }
+            0x21 => {
+                let data = self.shift(self.registers.get_c(), 0);
+                self.registers.set_c(data);
+            }
+            0x22 => {
+                let data = self.shift(self.registers.get_d(), 0);
+                self.registers.set_d(data);
+            }
+            0x23 => {
+                let data = self.shift(self.registers.get_e(), 0);
+                self.registers.set_e(data);
+            }
+            0x24 => {
+                let data = self.shift(self.registers.get_h(), 0);
+                self.registers.set_h(data);
+            }
+            0x25 => {
+                let data = self.shift(self.registers.get_l(), 0);
+                self.registers.set_l(data);
+            }
+            0x26 => {
+                let data = self.shift(self.ram.read(self.registers.get_hl()), 0);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x27 => {
+                let data = self.shift(self.registers.get_a(), 0);
+                self.registers.set_a(data);
+            }
+            0x28 => {
+                let data = self.shift(self.registers.get_b(), 1);
+                self.registers.set_b(data);
+            }
+            0x29 => {
+                let data = self.shift(self.registers.get_c(), 1);
+                self.registers.set_c(data);
+            }
+            0x2A => {
+                let data = self.shift(self.registers.get_d(), 1);
+                self.registers.set_d(data);
+            }
+            0x2B => {
+                let data = self.shift(self.registers.get_e(), 1);
+                self.registers.set_e(data);
+            }
+            0x2C => {
+                let data = self.shift(self.registers.get_h(), 1);
+                self.registers.set_h(data);
+            }
+            0x2D => {
+                let data = self.shift(self.registers.get_l(), 1);
+                self.registers.set_l(data);
+            }
+            0x2E => {
+                let data = self.shift(self.ram.read(self.registers.get_hl()), 1);
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x2F => {
+                let data = self.shift(self.registers.get_a(), 1);
+                self.registers.set_a(data);
+            }
+            0x30 => {
+                let data = self.swap(self.registers.get_b());
+                self.registers.set_b(data);
+            }
+            0x31 => {
+                let data = self.swap(self.registers.get_c());
+                self.registers.set_c(data);
+            }
+            0x32 => {
+                let data = self.swap(self.registers.get_d());
+                self.registers.set_d(data);
+            }
+            0x33 => {
+                let data = self.swap(self.registers.get_e());
+                self.registers.set_e(data);
+            }
+            0x34 => {
+                let data = self.swap(self.registers.get_h());
+                self.registers.set_h(data);
+            }
+            0x35 => {
+                let data = self.swap(self.registers.get_l());
+                self.registers.set_l(data);
+            }
+            0x36 => {
+                let data = self.swap(self.ram.read(self.registers.get_hl()));
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x37 => {
+                let data = self.swap(self.registers.get_a());
+                self.registers.set_a(data);
+            }
+            0x38 => {
+                let data = self.right_shift(self.registers.get_b());
+                self.registers.set_b(data);
+            }
+            0x39 => {
+                let data = self.right_shift(self.registers.get_c());
+                self.registers.set_c(data);
+            }
+            0x3A => {
+                let data = self.right_shift(self.registers.get_d());
+                self.registers.set_d(data);
+            }
+            0x3B => {
+                let data = self.right_shift(self.registers.get_e());
+                self.registers.set_e(data);
+            }
+            0x3C => {
+                let data = self.right_shift(self.registers.get_h());
+                self.registers.set_h(data);
+            }
+            0x3D => {
+                let data = self.right_shift(self.registers.get_l());
+                self.registers.set_l(data);
+            }
+            0x3E => {
+                let data = self.right_shift(self.ram.read(self.registers.get_hl()));
+                self.ram.write(self.registers.get_hl(), data);
+                self.cycles += 8;
+            }
+            0x3F => {
+                let data = self.right_shift(self.registers.get_a());
+                self.registers.set_a(data);
+            }
+            0x40 => self.bit(self.registers.get_b(), 0),
+            0x41 => self.bit(self.registers.get_c(), 0),
+            0x42 => self.bit(self.registers.get_d(), 0),
+            0x43 => self.bit(self.registers.get_e(), 0),
+            0x44 => self.bit(self.registers.get_h(), 0),
+            0x45 => self.bit(self.registers.get_l(), 0),
+            0x46 => {
+                self.bit(self.ram.read(self.registers.get_hl()), 0);
+                self.cycles += 8;
+            }
+            0x47 => self.bit(self.registers.get_a(), 0),
+            0x48 => self.bit(self.registers.get_b(), 1),
+            0x49 => self.bit(self.registers.get_c(), 1),
+            0x4A => self.bit(self.registers.get_d(), 1),
+            0x4B => self.bit(self.registers.get_e(), 1),
+            0x4C => self.bit(self.registers.get_h(), 1),
+            0x4D => self.bit(self.registers.get_l(), 1),
+            0x4E => {
+                self.bit(self.ram.read(self.registers.get_hl()), 1);
+                self.cycles += 8;
+            }
+            0x4F => self.bit(self.registers.get_a(), 1),
+            0x50 => self.bit(self.registers.get_b(), 2),
+            0x51 => self.bit(self.registers.get_c(), 2),
+            0x52 => self.bit(self.registers.get_d(), 2),
+            0x53 => self.bit(self.registers.get_e(), 2),
+            0x54 => self.bit(self.registers.get_h(), 2),
+            0x55 => self.bit(self.registers.get_l(), 2),
+            0x56 => {
+                self.bit(self.ram.read(self.registers.get_hl()), 2);
+                self.cycles += 8;
+            }
+            0x57 => self.bit(self.registers.get_a(), 2),
+            0x58 => self.bit(self.registers.get_b(), 3),
+            0x59 => self.bit(self.registers.get_c(), 3),
+            0x5A => self.bit(self.registers.get_d(), 3),
+            0x5B => self.bit(self.registers.get_e(), 3),
+            0x5C => self.bit(self.registers.get_h(), 3),
+            0x5D => self.bit(self.registers.get_l(), 3),
+            0x5E => {
+                self.bit(self.ram.read(self.registers.get_hl()), 3);
+                self.cycles += 8;
+            }
+            0x5F => self.bit(self.registers.get_a(), 3),
+            0x60 => self.bit(self.registers.get_b(), 4),
+            0x61 => self.bit(self.registers.get_c(), 4),
+            0x62 => self.bit(self.registers.get_d(), 4),
+            0x63 => self.bit(self.registers.get_e(), 4),
+            0x64 => self.bit(self.registers.get_h(), 4),
+            0x65 => self.bit(self.registers.get_l(), 4),
+            0x66 => {
+                self.bit(self.ram.read(self.registers.get_hl()), 4);
+                self.cycles += 8;
+            }
+            0x67 => self.bit(self.registers.get_a(), 4),
+            0x68 => self.bit(self.registers.get_b(), 5),
+            0x69 => self.bit(self.registers.get_c(), 5),
+            0x6A => self.bit(self.registers.get_d(), 5),
+            0x6B => self.bit(self.registers.get_e(), 5),
+            0x6C => self.bit(self.registers.get_h(), 5),
+            0x6D => self.bit(self.registers.get_l(), 5),
+            0x6E => {
+                self.bit(self.ram.read(self.registers.get_hl()), 5);
+                self.cycles += 8;
+            }
+            0x6F => self.bit(self.registers.get_a(), 5),
+            0x70 => self.bit(self.registers.get_b(), 6),
+            0x71 => self.bit(self.registers.get_c(), 6),
+            0x72 => self.bit(self.registers.get_d(), 6),
+            0x73 => self.bit(self.registers.get_e(), 6),
+            0x74 => self.bit(self.registers.get_h(), 6),
+            0x75 => self.bit(self.registers.get_l(), 6),
+            0x76 => {
+                self.bit(self.ram.read(self.registers.get_hl()), 6);
+                self.cycles += 8;
+            }
+            0x77 => self.bit(self.registers.get_a(), 6),
+            0x78 => self.bit(self.registers.get_b(), 7),
+            0x79 => self.bit(self.registers.get_c(), 7),
+            0x7A => self.bit(self.registers.get_d(), 7),
+            0x7B => self.bit(self.registers.get_e(), 7),
+            0x7C => self.bit(self.registers.get_h(), 7),
+            0x7D => self.bit(self.registers.get_l(), 7),
+            0x7E => {
+                self.bit(self.ram.read(self.registers.get_hl()), 7);
+                self.cycles += 8;
+            }
+            0x7F => self.bit(self.registers.get_a(), 7),
+
             0x80 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 0);
                 self.registers.set_b(data);
@@ -1951,9 +2303,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0x86 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 0));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 0)); 
+                self.cycles+=16;
             }
             0x87 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 0);
@@ -1984,9 +2337,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0x8E => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 1));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 1)); 
+                self.cycles+=16;
             }
             0x8F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 1);
@@ -2017,9 +2371,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0x96 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 2));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 2)); 
+                self.cycles+=16;
             }
             0x97 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 2);
@@ -2050,9 +2405,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0x9E => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 3));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 3)); 
+                self.cycles+=16;
             }
             0x9F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 3);
@@ -2083,9 +2439,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xA6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 4));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 4)); 
+                self.cycles+=16;
             }
             0xA7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 4);
@@ -2116,9 +2473,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xAE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 5));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 5)); 
+                self.cycles+=16;
             }
             0xAF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 5);
@@ -2149,9 +2507,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xB6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 6));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 6)); 
+                self.cycles+=16;
             }
             0xB7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 6);
@@ -2182,9 +2541,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xBE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & !(1 << 7));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & !(1 << 7)); 
+                self.cycles+=16;
             }
             0xBF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 7);
@@ -2215,9 +2575,11 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xC6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 0));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 0)); 
+                self.cycles+=16;
+
             }
             0xC7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 0);
@@ -2236,8 +2598,8 @@ impl<'a> CPU<'a> {
                 self.registers.set_d(data);
             }
             0xCB => {
-                //todo
-            }
+                let data = self.set_bit_8bit(self.registers.get_e(), 1);
+                self.registers.set_e(data);            }
             0xCC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
@@ -2247,9 +2609,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xCE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 1));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 1)); 
+                self.cycles+=16;
             }
             0xCF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 1);
@@ -2280,9 +2643,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xD6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 2));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 2)); 
+                self.cycles+=16;
             }
             0xD7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 2);
@@ -2313,9 +2677,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xDE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 3));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 3)); 
+                self.cycles+=16;
             }
             0xDF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 3);
@@ -2346,9 +2711,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xE6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 4));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 4)); 
+                self.cycles+=16;
             }
             0xE7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 4);
@@ -2379,9 +2745,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xEE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 5));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 5)); 
+                self.cycles+=16;
             }
             0xEF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 5);
@@ -2412,9 +2779,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xF6 => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 6));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 6)); 
+                self.cycles+=16;
             }
             0xF7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 6);
@@ -2445,9 +2813,10 @@ impl<'a> CPU<'a> {
                 self.registers.set_l(data);
             }
             0xFE => {
-                let data = self.registers.get_hl();
-                self.registers.set_hl(data & (1 << 7));
-                self.cycles += 16;
+                let address = self.registers.get_hl();
+                let data = self.ram.read(address);
+                self.ram.write(address, data & (1 << 7)); 
+                self.cycles+=16;
             }
             0xFF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 7);
@@ -2743,6 +3112,153 @@ impl<'a> CPU<'a> {
         self.registers.set_pc(address);
 
         self.cycles += 16;
+    }
+    fn rotate_without_carry(&mut self, mut value: u8, type_: u8) -> u8 {
+        let bool;
+        if type_ == 0 {
+            bool = (value & 0x80) != 0;
+            value = value.rotate_left(1);
+        } else {
+            bool = (value & 0x01) != 0;
+            value = value.rotate_right(1);
+        }
+
+        let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        }
+        else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if bool {
+            f |= FLAGS::C as u8;
+        }
+        else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 8;
+
+        value
+    }
+    fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
+        let bool;
+        let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
+        if type_ == 0 {
+            bool = (value & 0x80) != 0;
+            value = (value << 1) | (carry as u8);
+        } else {
+            bool = (value & 0x01) != 0;
+            value = (value >> 1) | ((carry as u8) << 7);
+        }
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        }
+        else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if bool {
+            f |= FLAGS::C as u8;
+        }
+        else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 8;
+
+        value
+    }
+
+    fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
+        let msb = value & 0x80;
+        let lsb_bool = (value & 0x01) != 0;
+        let msb_bool = (value & 0x80) != 0;
+        let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+        if type_ == 0 {
+            value <<= 1;
+            if msb_bool {
+                f |= FLAGS::C as u8;
+            }
+            else {
+                f &= !(FLAGS::C as u8)
+            }
+        } else {
+            value = (value >> 1) | msb;
+            if lsb_bool {
+                f |= FLAGS::C as u8;
+            }
+            else {
+                f &= !(FLAGS::C as u8)
+            }
+        }
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 8;
+        value
+    }
+    fn swap(&mut self, value: u8) -> u8 {
+        let result = (value >> 4) | (value << 4);
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+        self.registers.set_f(f);
+        self.cycles += 8;
+        result
+    }
+    fn right_shift(&mut self, mut value: u8) -> u8 {
+        let lsb = (value & 0x01) != 0;
+
+        value >>= 1;
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        if lsb {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 8;
+
+        value
+    }
+    fn bit(&mut self, value: u8, bit: u8) {
+        let tested_bit = value & (1 << bit);
+
+        let mut f = self.registers.get_f() | FLAGS::H as u8;
+        f &= !(FLAGS::N as u8);
+
+        if tested_bit == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+        self.cycles += 8;
     }
 }
 
