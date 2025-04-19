@@ -11,6 +11,7 @@ pub struct CPU {
     pub cycles: u64,
     pub ram: RAM,
     pub halted: bool,
+    pub stopped: bool,
 }
 impl CPU {
     pub fn new(ram: RAM) -> Self {
@@ -21,6 +22,7 @@ impl CPU {
             cycles: 0,
             ram,
             halted: false,
+            stopped: false,
         }
     }
     pub fn fetch(&mut self) -> u8 {
@@ -187,6 +189,7 @@ impl CPU {
                 //not implemented, stop
 
                 println!("CPU Stopped");
+                self.stopped = true;
                 self.cycles += 4;
             }
             0x11 => {
