@@ -1,11 +1,11 @@
 pub struct RAM {
-    rom : Vec<u8>,
-    vram: [u8; 0x2000],
-    wram: [u8; 0x2000],
-    hram: [u8; 0x7F],
-    oam: [u8; 0xA0], 
-    io: [u8; 0x80], 
-    interrupt_enable: u8,
+    rom: Vec<u8>,
+    pub vram: [u8; 0x2000],
+    pub wram: [u8; 0x2000],
+    pub hram: [u8; 0x7F],
+    pub oam: [u8; 0xA0],
+    pub io: [u8; 0x80],
+    pub interrupt_enable: u8,
 }
 impl RAM {
     pub fn new(rom: Vec<u8>) -> Self {
@@ -22,12 +22,12 @@ impl RAM {
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x7FFF => self.rom[address as usize],               // ROM
-            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize],   // VRAM
-            0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],   // WRAM
-            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],    // OAM
-            0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],     // I/O
-            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],   // HRAM
+            0x0000..=0x7FFF => self.rom.get(address as usize).copied().unwrap_or(0xFF),
+            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize], // VRAM
+            0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize], // WRAM
+            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],  // OAM
+            0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],   // I/O
+            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize], // HRAM
             0xFFFF => self.interrupt_enable,
             _ => 0xFF, // Unusable or not implemented
         }
