@@ -1,4 +1,4 @@
-use sdl2::{keyboard::Keycode, sys::key_t};
+use sdl2::{event::Event, keyboard::Keycode, sys::key_t};
 
 enum KEYS {
     SELECT = 0b11011111,
