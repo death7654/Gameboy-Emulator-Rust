@@ -1,3 +1,8 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::ram::RAM;
+
 const PALLETE: [[u8; 3]; 4] = [
     [255, 255, 255], // White
     [170, 170, 170], // Light Gray
@@ -7,35 +12,33 @@ const PALLETE: [[u8; 3]; 4] = [
 
 pub struct GPU {
     pub framebuffer: [u8; 160 * 144 * 3],
+    pub ram: Rc<RefCell<RAM>>,
 }
+
 impl GPU {
-    pub fn new() -> Self {
+    pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
         Self {
             framebuffer: [0xff; 160 * 144 * 3],
+            ram,
         }
     }
-    pub fn render(&mut self, mut vram: &[u8; 0x2000]) {
+    pub fn render(&mut self) {
         let tile_map_base = 0x1800;
         let tile_data_base = 0x0000;
 
-        println!("Tile Data[0x0000..0x0010]: {:?}", &vram[0x0000..0x0010]); // Tile 0
-        println!("Tile Data[0x0010..0x0020]: {:?}", &vram[0x0010..0x0020]); // Tile 1
-        println!("Tile Data[0x0020..0x0030]: {:?}", &vram[0x0020..0x0030]); // Tile 2
-
-
         for ty in 0..18 {
             for tx in 0..20 {
-                let tile_index = vram[tile_map_base + ty * 32 + tx];
+                let tile_index = self.ram.borrow().vram[tile_map_base + ty * 32 + tx];
                 let tile_offset = tile_data_base + (tile_index as usize) * 16;
 
-                if tile_offset + 16 > vram.len() {
+                if tile_offset + 16 > self.ram.borrow().vram.len() {
                     eprintln!("Invalid tile index: {}", tile_index);
                     continue;
                 }
 
                 for row in 0..8 {
-                    let low_byte = vram[tile_offset + row * 2];
-                    let high_byte = vram[tile_offset + row * 2 + 1];
+                    let low_byte = self.ram.borrow().vram[tile_offset + row * 2];
+                    let high_byte = self.ram.borrow().vram[tile_offset + row * 2 + 1];
 
                     for col in 0..8 {
                         let hi = (high_byte >> (7 - col)) & 1;

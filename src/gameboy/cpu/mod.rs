@@ -1,36 +1,54 @@
 mod registers;
 
-use crate::RAM;
+use crate::gameboy::RAM;
 use registers::FLAGS;
 use registers::REGISTERS;
+
+use std::cell::Ref;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct CPU {
     pub registers: REGISTERS,
     pub ime: bool, //interrupt master enable
-    pub opcode: u8,
     pub cycles: u64,
-    pub ram: RAM,
+
+    pub ram: Rc<RefCell<RAM>>,
     pub halted: bool,
     pub stopped: bool,
+
+    pub div_counter: u64,
 }
 impl CPU {
-    pub fn new(ram: RAM) -> Self {
+    pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
         CPU {
             registers: REGISTERS::new(),
             ime: true,
-            opcode: 0,
             cycles: 0,
             ram,
             halted: false,
             stopped: false,
+            div_counter: 0,
         }
     }
     pub fn fetch(&mut self) -> u8 {
-        let opcode = self.ram.read(self.registers.get_pc());
+        let opcode = self.ram.borrow().read(self.registers.get_pc());
         self.registers.set_pc(self.registers.get_pc() + 1);
         opcode
     }
+    pub fn timer(&mut self, cycles: u64) {
+        self.div_counter += cycles;
+    
+        if self.div_counter >= 256 {
+            self.div_counter -= 256; 
+            let new_div = self.ram.borrow().read(0xFF04).wrapping_add(1); 
+            self.ram.borrow_mut().write(0xFF04, new_div); 
+        }
+    
+    }
+    
     pub fn execute(&mut self, opcode: u8) {
+        let initial_cycles = self.cycles;
         match opcode {
             0x00 => {
                 //NOP
@@ -39,8 +57,8 @@ impl CPU {
             }
             0x01 => {
                 //Load 2 bytes into register BC
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let data = ((upper_byte as u16) << 8) | (lower_byte as u16);
                 self.registers.set_bc(data);
                 self.cycles += 12;
@@ -49,7 +67,7 @@ impl CPU {
                 //load the data in a into the ram address found in bc
                 let address = self.registers.get_bc();
                 let data = self.registers.get_a();
-                self.ram.write(address, data);
+                self.ram.borrow_mut().write(address, data);
                 self.cycles += 8;
             }
             0x03 => {
@@ -69,7 +87,7 @@ impl CPU {
             }
             0x06 => {
                 //load 1 byte into B
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_b(data);
                 self.cycles += 8;
             }
@@ -102,12 +120,12 @@ impl CPU {
             }
             0x08 => {
                 //load load sp into the address from ram
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 let sp = self.registers.get_sp();
-                self.ram.write(address, (sp & 0x00FF) as u8);
-                self.ram.write(address + 1, (sp >> 8) as u8);
+                self.ram.borrow_mut().write(address, (sp & 0x00FF) as u8);
+                self.ram.borrow_mut().write(address + 1, (sp >> 8) as u8);
 
                 self.cycles += 20;
             }
@@ -142,7 +160,7 @@ impl CPU {
                 self.cycles += 8;
             }
             0x0A => {
-                let data = self.ram.read(self.registers.get_bc());
+                let data = self.ram.borrow().read(self.registers.get_bc());
                 self.registers.set_a(data);
                 self.cycles += 8;
             }
@@ -161,7 +179,7 @@ impl CPU {
                 self.registers.set_c(data);
             }
             0x0E => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_c(data);
                 self.cycles += 8;
             }
@@ -193,8 +211,8 @@ impl CPU {
                 self.cycles += 4;
             }
             0x11 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
 
                 let data = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -205,7 +223,7 @@ impl CPU {
                 let address = self.registers.get_de();
                 let data = self.registers.get_a();
 
-                self.ram.write(address, data);
+                self.ram.borrow_mut().write(address, data);
                 self.cycles += 8;
             }
             0x13 => {
@@ -222,7 +240,7 @@ impl CPU {
                 self.registers.set_d(data);
             }
             0x16 => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_d(data);
                 self.cycles += 8;
             }
@@ -250,7 +268,7 @@ impl CPU {
             }
             0x18 => {
                 //relative jump
-                let jump = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 self.registers
                     .set_pc(self.registers.get_pc().wrapping_add(jump as u16));
                 self.cycles += 12;
@@ -285,7 +303,7 @@ impl CPU {
                 self.cycles += 8
             }
             0x1A => {
-                let data = self.ram.read(self.registers.get_de());
+                let data = self.ram.borrow().read(self.registers.get_de());
                 self.registers.set_a(data);
                 self.cycles += 8;
             }
@@ -305,7 +323,7 @@ impl CPU {
             }
             0x1E => {
                 //load the next byte onto register E
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_e(data);
                 self.cycles += 8;
             }
@@ -333,7 +351,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x20 => {
-                let jump = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     self.registers
                         .set_pc(self.registers.get_pc().wrapping_add(jump as i16 as u16));
@@ -343,8 +361,8 @@ impl CPU {
                 }
             }
             0x21 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
 
                 let data = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -355,7 +373,7 @@ impl CPU {
                 //load a into memory with the address found in HL and increment HL by 1
                 let data = self.registers.get_a();
                 let address = self.registers.get_hl();
-                self.ram.write(address, data);
+                self.ram.borrow_mut().write(address, data);
 
                 self.cycles += 8;
             }
@@ -373,7 +391,7 @@ impl CPU {
                 self.registers.set_h(data);
             }
             0x26 => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_h(data);
                 self.cycles += 8;
             }
@@ -421,7 +439,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x28 => {
-                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
                     self.registers
                         .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
@@ -460,7 +478,7 @@ impl CPU {
                 self.cycles += 8;
             }
             0x2A => {
-                let data = self.ram.read(self.registers.get_hl());
+                let data = self.ram.borrow().read(self.registers.get_hl());
                 self.registers
                     .set_hl(self.registers.get_hl().wrapping_add(1));
                 self.registers.set_a(data);
@@ -480,7 +498,7 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x2E => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_l(data);
                 self.cycles += 8;
             }
@@ -495,7 +513,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x30 => {
-                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
                     self.registers
                         .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
@@ -505,15 +523,15 @@ impl CPU {
                 }
             }
             0x31 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let data = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.registers.set_sp(data);
                 self.cycles += 12;
             }
             0x32 => {
                 let data = self.registers.get_a();
-                self.ram.write(self.registers.get_hl(), data);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.registers
                     .set_hl(self.registers.get_hl().wrapping_sub(1));
 
@@ -526,9 +544,9 @@ impl CPU {
             }
             0x34 => {
                 let address = self.registers.get_hl();
-                let value = self.ram.read(address);
+                let value = self.ram.borrow().read(address);
                 let result = value.wrapping_add(1);
-                self.ram.write(address, result);
+                self.ram.borrow_mut().write(address, result);
 
                 if result == 0 {
                     self.registers
@@ -553,9 +571,9 @@ impl CPU {
             }
             0x35 => {
                 let address = self.registers.get_hl();
-                let value = self.ram.read(address);
+                let value = self.ram.borrow().read(address);
                 let result = value.wrapping_sub(1);
-                self.ram.write(address, result);
+                self.ram.borrow_mut().write(address, result);
 
                 //Z
                 if result == 0 {
@@ -582,8 +600,8 @@ impl CPU {
             }
             0x36 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(self.registers.get_and_inc_pc());
-                self.ram.write(address, data);
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                self.ram.borrow_mut().write(address, data);
                 self.cycles += 12;
             }
             0x37 => {
@@ -596,7 +614,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x38 => {
-                let offset = self.ram.read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
                     self.registers
                         .set_pc(self.registers.get_pc().wrapping_add(offset as i16 as u16));
@@ -631,7 +649,7 @@ impl CPU {
                 self.cycles += 8;
             }
             0x3A => {
-                let data = self.ram.read(self.registers.get_hl());
+                let data = self.ram.borrow().read(self.registers.get_hl());
                 self.registers
                     .set_hl(self.registers.get_hl().wrapping_sub(1));
 
@@ -652,7 +670,7 @@ impl CPU {
                 self.registers.set_a(data);
             }
             0x3E => {
-                let value = self.ram.read(self.registers.get_and_inc_pc());
+                let value = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.registers.set_a(value);
                 self.cycles += 8;
             }
@@ -693,7 +711,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x46 => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_b(value);
                 self.cycles += 4;
             }
@@ -725,7 +743,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x4E => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_c(value);
                 self.cycles += 8;
             }
@@ -757,7 +775,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x56 => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_d(value);
                 self.cycles += 8;
             }
@@ -789,7 +807,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x5E => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_e(value);
                 self.cycles += 8;
             }
@@ -821,7 +839,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x66 => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_h(value);
                 self.cycles += 8;
             }
@@ -853,7 +871,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x6E => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_l(value);
                 self.cycles += 8;
             }
@@ -863,31 +881,37 @@ impl CPU {
             }
             0x70 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_b());
                 self.cycles += 8;
             }
             0x71 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_c());
                 self.cycles += 8;
             }
             0x72 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_d());
                 self.cycles += 8;
             }
             0x73 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_e());
                 self.cycles += 8;
             }
             0x74 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_h());
                 self.cycles += 8;
             }
             0x75 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_l());
                 self.cycles += 8;
             }
@@ -897,6 +921,7 @@ impl CPU {
             }
             0x77 => {
                 self.ram
+                    .borrow_mut()
                     .write(self.registers.get_hl(), self.registers.get_a());
                 self.cycles += 8;
             }
@@ -925,7 +950,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0x7E => {
-                let value = self.ram.read(self.registers.get_hl());
+                let value = self.ram.borrow().read(self.registers.get_hl());
                 self.registers.set_a(value);
                 self.cycles += 8;
             }
@@ -951,7 +976,8 @@ impl CPU {
                 self.add_8bit(self.registers.get_l());
             }
             0x86 => {
-                self.add_8bit(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.add_8bit(value);
                 self.cycles += 4;
             }
             0x87 => {
@@ -976,7 +1002,8 @@ impl CPU {
                 self.add_with_carry(self.registers.get_l());
             }
             0x8E => {
-                self.add_with_carry(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.add_with_carry(value);
                 self.cycles += 4;
             }
             0x8F => {
@@ -1001,7 +1028,8 @@ impl CPU {
                 self.sub_8bit(self.registers.get_l());
             }
             0x96 => {
-                self.sub_8bit(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.sub_8bit(value);
                 self.cycles += 4;
             }
             0x97 => {
@@ -1029,7 +1057,8 @@ impl CPU {
                 self.sub_with_carry(self.registers.get_l());
             }
             0x9E => {
-                self.sub_with_carry(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.sub_with_carry(value);
                 self.cycles += 4;
             }
             0x9F => {
@@ -1077,7 +1106,8 @@ impl CPU {
                 self.and(self.registers.get_l());
             }
             0xA6 => {
-                self.and(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.and(value);
                 self.cycles += 4;
             }
             0xA7 => {
@@ -1102,7 +1132,8 @@ impl CPU {
                 self.xor(self.registers.get_l());
             }
             0xAE => {
-                self.xor(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.xor(value);
                 self.cycles += 4;
             }
             0xAF => {
@@ -1129,7 +1160,8 @@ impl CPU {
                 self.or(self.registers.get_l());
             }
             0xB6 => {
-                self.or(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.or(value);
                 self.cycles += 4;
             }
             0xB7 => {
@@ -1154,7 +1186,8 @@ impl CPU {
                 self.compare(self.registers.get_l());
             }
             0xBE => {
-                self.compare(self.ram.read(self.registers.get_hl()));
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.compare(value);
                 self.cycles += 4;
             }
             0xBF => {
@@ -1165,10 +1198,10 @@ impl CPU {
             }
             0xC0 => {
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
-                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
-                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1181,10 +1214,10 @@ impl CPU {
                 }
             }
             0xC1 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1194,8 +1227,8 @@ impl CPU {
                 self.cycles += 12;
             }
             0xC2 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     self.registers.set_pc(address);
@@ -1205,27 +1238,27 @@ impl CPU {
                 }
             }
             0xC3 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.registers.set_pc(address);
                 self.cycles += 16;
             }
             0xC4 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() >> 8) as u8,
                     );
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() & 0xFF) as u8,
                     );
@@ -1242,16 +1275,20 @@ impl CPU {
 
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (bc >> 8) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (bc >> 8) as u8);
 
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (bc & 0xFF) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (bc & 0xFF) as u8);
 
                 self.cycles += 16;
             }
             0xC6 => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.add_8bit(data);
                 self.cycles += 8;
             }
@@ -1260,10 +1297,10 @@ impl CPU {
             }
             0xC8 => {
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
-                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
-                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1276,10 +1313,10 @@ impl CPU {
                 }
             }
             0xC9 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1289,8 +1326,8 @@ impl CPU {
                 self.cycles += 16;
             }
             0xCA => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
@@ -1306,20 +1343,20 @@ impl CPU {
                 self.cb(opcode);
             }
             0xCC => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() >> 8) as u8,
                     );
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() & 0xFF) as u8,
                     );
@@ -1332,19 +1369,19 @@ impl CPU {
                 }
             }
             0xCD => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(
+                self.ram.borrow_mut().write(
                     self.registers.get_sp(),
                     (self.registers.get_pc() >> 8) as u8,
                 );
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(
+                self.ram.borrow_mut().write(
                     self.registers.get_sp(),
                     (self.registers.get_pc() & 0xFF) as u8,
                 );
@@ -1354,7 +1391,7 @@ impl CPU {
                 self.cycles += 24;
             }
             0xCE => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.add_with_carry(data);
                 self.cycles += 4;
             }
@@ -1363,10 +1400,10 @@ impl CPU {
             }
             0xD0 => {
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
-                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
-                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1379,10 +1416,10 @@ impl CPU {
                 }
             }
             0xD1 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1392,8 +1429,8 @@ impl CPU {
                 self.cycles += 12
             }
             0xD2 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
@@ -1408,20 +1445,20 @@ impl CPU {
                 self.cycles += 4;
             }
             0xD4 => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() >> 8) as u8,
                     );
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() & 0xFF) as u8,
                     );
@@ -1437,15 +1474,20 @@ impl CPU {
                 let de = self.registers.get_de();
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (de >> 8) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (de >> 8) as u8);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (de & 0xFF) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (de & 0xFF) as u8);
                 self.cycles += 16;
             }
             0xD6 => {
                 let address = self.registers.get_and_inc_pc();
-                self.sub_8bit(self.ram.read(address));
+                let data = self.ram.borrow().read(address);
+                self.sub_8bit(data);
                 self.cycles += 4;
             }
             0xD7 => {
@@ -1453,10 +1495,10 @@ impl CPU {
             }
             0xD8 => {
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
-                    let lower_byte = self.ram.read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
-                    let upper_byte = self.ram.read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1469,10 +1511,10 @@ impl CPU {
                 }
             }
             0xD9 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1483,8 +1525,8 @@ impl CPU {
                 self.cycles += 16;
             }
             0xDA => {
-                let lower = self.ram.read(self.registers.get_and_inc_pc());
-                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper as u16) << 8) | lower as u16;
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
                     self.registers.set_pc(address);
@@ -1498,20 +1540,20 @@ impl CPU {
                 self.cycles += 4;
             }
             0xDC => {
-                let lower_byte = self.ram.read(self.registers.get_and_inc_pc());
-                let upper_byte = self.ram.read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() >> 8) as u8,
                     );
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_sub(1));
-                    self.ram.write(
+                    self.ram.borrow_mut().write(
                         self.registers.get_sp(),
                         (self.registers.get_pc() & 0xFF) as u8,
                     );
@@ -1528,7 +1570,7 @@ impl CPU {
                 self.cycles += 4;
             }
             0xDE => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.sub_with_carry(data);
                 self.cycles += 4;
             }
@@ -1536,18 +1578,18 @@ impl CPU {
                 self.reset(0x18);
             }
             0xE0 => {
-                let offset = self.ram.read(self.registers.get_and_inc_pc());
+                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = 0xFF00 | (offset as u16);
 
-                self.ram.write(address, self.registers.get_a());
+                self.ram.borrow_mut().write(address, self.registers.get_a());
 
                 self.cycles += 12;
             }
             0xE1 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1558,7 +1600,7 @@ impl CPU {
             }
             0xE2 => {
                 let address = 0xff00 | self.registers.get_c() as u16;
-                self.ram.write(address, self.registers.get_a());
+                self.ram.borrow_mut().write(address, self.registers.get_a());
 
                 self.cycles += 8;
             }
@@ -1575,24 +1617,29 @@ impl CPU {
 
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (hl >> 8) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (hl >> 8) as u8);
 
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (hl & 0xFF) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (hl & 0xFF) as u8);
 
                 self.cycles += 16;
             }
             0xE6 => {
                 let address = self.registers.get_and_inc_pc();
-                self.and(self.ram.read(address));
+                let data = self.ram.borrow().read(address);
+                self.and(data);
             }
             0xE7 => {
                 self.reset(0x20);
             }
             0xE8 => {
                 let sp = self.registers.get_sp();
-                let e8 = self.ram.read(self.registers.get_and_inc_pc()) as i8; // Read signed immediate value
+                let e8 = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8; // Read signed immediate value
 
                 let result = sp.wrapping_add(e8 as u16);
                 self.registers.set_sp(result);
@@ -1614,11 +1661,11 @@ impl CPU {
                 self.registers.set_pc(self.registers.get_hl());
             }
             0xEA => {
-                let lower = self.ram.read(self.registers.get_and_inc_pc());
-                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = (upper as u16) << 8 | lower as u16;
 
-                self.ram.write(address, self.registers.get_a());
+                self.ram.borrow_mut().write(address, self.registers.get_a());
                 self.cycles += 16;
             }
             0xEB => {
@@ -1634,26 +1681,26 @@ impl CPU {
                 self.cycles += 4;
             }
             0xEE => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.xor(data);
             }
             0xEF => {
                 self.reset(0x28);
             }
             0xF0 => {
-                let offset = self.ram.read(self.registers.get_and_inc_pc());
+                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = 0xFF00 | (offset as u16);
 
-                let value = self.ram.read(address);
+                let value = self.ram.borrow().read(address);
                 self.registers.set_a(value);
 
                 self.cycles += 12;
             }
             0xF1 => {
-                let lower_byte = self.ram.read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
 
@@ -1664,7 +1711,7 @@ impl CPU {
             }
             0xF2 => {
                 let address = 0xFF00 | self.registers.get_c() as u16;
-                let data = self.ram.read(address);
+                let data = self.ram.borrow().read(address);
                 self.registers.set_a(data);
                 self.cycles += 8;
             }
@@ -1680,15 +1727,19 @@ impl CPU {
                 let af = self.registers.get_af();
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (af >> 8) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (af >> 8) as u8);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_sub(1));
-                self.ram.write(self.registers.get_sp(), (0xFF & af) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(self.registers.get_sp(), (0xFF & af) as u8);
 
                 self.cycles += 16;
             }
             0xF6 => {
-                let data = self.ram.read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.or(data);
             }
             0xF7 => {
@@ -1696,7 +1747,7 @@ impl CPU {
             }
             0xF8 => {
                 let sp = self.registers.get_sp();
-                let e8 = self.ram.read(self.registers.get_and_inc_pc()) as i8; // Signed immediate value
+                let e8 = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8; // Signed immediate value
 
                 let result = sp.wrapping_add(e8 as u16);
                 self.registers.set_hl(result);
@@ -1719,11 +1770,11 @@ impl CPU {
                 self.cycles += 8;
             }
             0xFA => {
-                let lower = self.ram.read(self.registers.get_and_inc_pc());
-                let upper = self.ram.read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 let address = ((upper as u16) << 8) | lower as u16;
 
-                self.registers.set_a(self.ram.read(address));
+                self.registers.set_a(self.ram.borrow().read(address));
                 self.cycles += 16;
             }
             0xFB => {
@@ -1740,7 +1791,7 @@ impl CPU {
             }
             0xFE => {
                 let a = self.registers.get_a();
-                let n8 = self.ram.read(self.registers.get_and_inc_pc());
+                let n8 = self.ram.borrow().read(self.registers.get_and_inc_pc());
 
                 let (result, borrow) = a.overflowing_sub(n8);
 
@@ -1763,8 +1814,10 @@ impl CPU {
             0xFF => {
                 self.reset(0x38);
             }
-            _ => println!("{} Not Implemented", opcode),
         }
+
+        let final_cycles = self.cycles.saturating_sub(initial_cycles);
+        self.timer(final_cycles);
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {
@@ -1793,8 +1846,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x06 => {
-                let data = self.rotate_without_carry(self.ram.read(self.registers.get_hl()), 0);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.rotate_without_carry(value, 0);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x07 => {
@@ -1826,8 +1880,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x0E => {
-                let data = self.rotate_without_carry(self.ram.read(self.registers.get_hl()), 1);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.rotate_without_carry(value, 1);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x0F => {
@@ -1859,8 +1914,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x16 => {
-                let data = self.rotate(self.ram.read(self.registers.get_hl()), 0);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.rotate(value, 0);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x17 => {
@@ -1892,8 +1948,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x1E => {
-                let data = self.rotate(self.ram.read(self.registers.get_hl()), 1);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.rotate(value, 1);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x1F => {
@@ -1925,8 +1982,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x26 => {
-                let data = self.shift(self.ram.read(self.registers.get_hl()), 0);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.shift(value, 0);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x27 => {
@@ -1958,8 +2016,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x2E => {
-                let data = self.shift(self.ram.read(self.registers.get_hl()), 1);
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.shift(value, 1);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x2F => {
@@ -1991,8 +2050,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x36 => {
-                let data = self.swap(self.ram.read(self.registers.get_hl()));
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.swap(value);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x37 => {
@@ -2024,8 +2084,9 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x3E => {
-                let data = self.right_shift(self.ram.read(self.registers.get_hl()));
-                self.ram.write(self.registers.get_hl(), data);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.right_shift(value);
+                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.cycles += 8;
             }
             0x3F => {
@@ -2039,7 +2100,8 @@ impl CPU {
             0x44 => self.bit(self.registers.get_h(), 0),
             0x45 => self.bit(self.registers.get_l(), 0),
             0x46 => {
-                self.bit(self.ram.read(self.registers.get_hl()), 0);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.bit(value, 0);
                 self.cycles += 8;
             }
             0x47 => self.bit(self.registers.get_a(), 0),
@@ -2050,7 +2112,8 @@ impl CPU {
             0x4C => self.bit(self.registers.get_h(), 1),
             0x4D => self.bit(self.registers.get_l(), 1),
             0x4E => {
-                self.bit(self.ram.read(self.registers.get_hl()), 1);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.bit(value, 1);
                 self.cycles += 8;
             }
             0x4F => self.bit(self.registers.get_a(), 1),
@@ -2061,7 +2124,8 @@ impl CPU {
             0x54 => self.bit(self.registers.get_h(), 2),
             0x55 => self.bit(self.registers.get_l(), 2),
             0x56 => {
-                self.bit(self.ram.read(self.registers.get_hl()), 2);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.bit(value, 2);
                 self.cycles += 8;
             }
             0x57 => self.bit(self.registers.get_a(), 2),
@@ -2072,7 +2136,8 @@ impl CPU {
             0x5C => self.bit(self.registers.get_h(), 3),
             0x5D => self.bit(self.registers.get_l(), 3),
             0x5E => {
-                self.bit(self.ram.read(self.registers.get_hl()), 3);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.bit(value, 3);
                 self.cycles += 8;
             }
             0x5F => self.bit(self.registers.get_a(), 3),
@@ -2083,7 +2148,8 @@ impl CPU {
             0x64 => self.bit(self.registers.get_h(), 4),
             0x65 => self.bit(self.registers.get_l(), 4),
             0x66 => {
-                self.bit(self.ram.read(self.registers.get_hl()), 4);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+                self.bit(value, 4);
                 self.cycles += 8;
             }
             0x67 => self.bit(self.registers.get_a(), 4),
@@ -2094,7 +2160,9 @@ impl CPU {
             0x6C => self.bit(self.registers.get_h(), 5),
             0x6D => self.bit(self.registers.get_l(), 5),
             0x6E => {
-                self.bit(self.ram.read(self.registers.get_hl()), 5);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+
+                self.bit(value, 5);
                 self.cycles += 8;
             }
             0x6F => self.bit(self.registers.get_a(), 5),
@@ -2105,7 +2173,9 @@ impl CPU {
             0x74 => self.bit(self.registers.get_h(), 6),
             0x75 => self.bit(self.registers.get_l(), 6),
             0x76 => {
-                self.bit(self.ram.read(self.registers.get_hl()), 6);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+
+                self.bit(value, 6);
                 self.cycles += 8;
             }
             0x77 => self.bit(self.registers.get_a(), 6),
@@ -2116,7 +2186,9 @@ impl CPU {
             0x7C => self.bit(self.registers.get_h(), 7),
             0x7D => self.bit(self.registers.get_l(), 7),
             0x7E => {
-                self.bit(self.ram.read(self.registers.get_hl()), 7);
+                let value = self.ram.borrow().read(self.registers.get_hl());
+
+                self.bit(value, 7);
                 self.cycles += 8;
             }
             0x7F => self.bit(self.registers.get_a(), 7),
@@ -2147,8 +2219,8 @@ impl CPU {
             }
             0x86 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 0));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 0));
                 self.cycles += 16;
             }
             0x87 => {
@@ -2181,8 +2253,8 @@ impl CPU {
             }
             0x8E => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 1));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 1));
                 self.cycles += 16;
             }
             0x8F => {
@@ -2215,8 +2287,8 @@ impl CPU {
             }
             0x96 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 2));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 2));
                 self.cycles += 16;
             }
             0x97 => {
@@ -2249,8 +2321,8 @@ impl CPU {
             }
             0x9E => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 3));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 3));
                 self.cycles += 16;
             }
             0x9F => {
@@ -2283,8 +2355,8 @@ impl CPU {
             }
             0xA6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 4));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 4));
                 self.cycles += 16;
             }
             0xA7 => {
@@ -2317,8 +2389,8 @@ impl CPU {
             }
             0xAE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 5));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 5));
                 self.cycles += 16;
             }
             0xAF => {
@@ -2351,8 +2423,8 @@ impl CPU {
             }
             0xB6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 6));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 6));
                 self.cycles += 16;
             }
             0xB7 => {
@@ -2385,8 +2457,8 @@ impl CPU {
             }
             0xBE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & !(1 << 7));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & !(1 << 7));
                 self.cycles += 16;
             }
             0xBF => {
@@ -2419,8 +2491,8 @@ impl CPU {
             }
             0xC6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 0));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 0));
                 self.cycles += 16;
             }
             0xC7 => {
@@ -2453,8 +2525,8 @@ impl CPU {
             }
             0xCE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 1));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 1));
                 self.cycles += 16;
             }
             0xCF => {
@@ -2487,8 +2559,8 @@ impl CPU {
             }
             0xD6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 2));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 2));
                 self.cycles += 16;
             }
             0xD7 => {
@@ -2521,8 +2593,8 @@ impl CPU {
             }
             0xDE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 3));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 3));
                 self.cycles += 16;
             }
             0xDF => {
@@ -2555,8 +2627,8 @@ impl CPU {
             }
             0xE6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 4));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 4));
                 self.cycles += 16;
             }
             0xE7 => {
@@ -2589,8 +2661,8 @@ impl CPU {
             }
             0xEE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 5));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 5));
                 self.cycles += 16;
             }
             0xEF => {
@@ -2623,8 +2695,8 @@ impl CPU {
             }
             0xF6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 6));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 6));
                 self.cycles += 16;
             }
             0xF7 => {
@@ -2657,16 +2729,13 @@ impl CPU {
             }
             0xFE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.read(address);
-                self.ram.write(address, data & (1 << 7));
+                let data = self.ram.borrow().read(address);
+                self.ram.borrow_mut().write(address, data & (1 << 7));
                 self.cycles += 16;
             }
             0xFF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 7);
                 self.registers.set_a(data);
-            }
-            _ => {
-                println!("Special Case CB OPCODE: {} not implemented", opcode);
             }
         }
     }
@@ -2943,13 +3012,13 @@ impl CPU {
     fn reset(&mut self, address: u16) {
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.ram.write(
+        self.ram.borrow_mut().write(
             self.registers.get_sp(),
             (self.registers.get_pc() >> 8) as u8,
         );
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.ram.write(
+        self.ram.borrow_mut().write(
             self.registers.get_sp(),
             (self.registers.get_pc() & 0xFF) as u8,
         );
@@ -3099,7 +3168,7 @@ impl CPU {
         self.registers.set_f(f);
         self.cycles += 8;
     }
-    pub fn get_vram(&self) -> &[u8; 0x2000] {
-        &self.ram.vram
+    pub fn get_vram(&self) -> Ref<[u8; 0x2000]> {
+        Ref::map(self.ram.borrow(), |ram: &RAM| &ram.vram)
     }
 }
