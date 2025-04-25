@@ -1,11 +1,9 @@
 mod gameboy;
 
-use std::time::Duration;
 
-use gameboy::cpu::CPU;
-use gameboy::gpu::GPU;
 use gameboy::input::get_input;
 use gameboy::ram::RAM;
+use gameboy::lcd;
 use sdl2;
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
@@ -18,40 +16,27 @@ const CPU_CLOCK: i32 = 4194304;
 
 fn main() {
     let rom = std::fs::read("roms/pred.gb").unwrap();
-    let ram = RAM::new(rom);
-    let mut cpu = CPU::new(ram);
-    let mut gpu = GPU::new();
+    let mut emulator = EMULATOR::new(rom);
 
     //games start at address 0x0100
-    cpu.registers.set_pc(0x0100);
-    //initialize input
-    cpu.ram.write(0xFF00, 0b11111111);
+    emulator.cpu.registers.set_pc(0x0100);
 
-    let sdl = sdl2::init().unwrap();
-    let video = sdl.video().unwrap();
+    //intialize input
+    emulator.cpu.ram.borrow_mut().write(0xFF00, 0b11111111);
 
-    let window = video
-        .window(
-            "Rust Game Boy",
-            (DISPLAY_WIDTH * SCALE) as u32,
-            (DISPLAY_HEIGHT * SCALE) as u32,
-        )
-        .position_centered()
-        .resizable()
-        .build()
-        .unwrap();
-
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    let texture_creator = canvas.texture_creator();
+    //intialize window
+    let (sdl, mut canvas) = match lcd::new() {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Failed to initialize SDL2: {}", e);
+            return; 
+        }
+    };
+        let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator
-        .create_texture_streaming(
-            PixelFormatEnum::RGB24,
-            DISPLAY_WIDTH as u32,
-            DISPLAY_HEIGHT as u32,
-        )
+        .create_texture_streaming(PixelFormatEnum::RGB24, WIDTH, HEIGHT)
         .unwrap();
-
     let mut event_pump = sdl.event_pump().unwrap();
 
     let mut frame_count = 0;
