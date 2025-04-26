@@ -1,6 +1,5 @@
 mod gameboy;
 
-
 use gameboy::input::get_input;
 use gameboy::lcd;
 use gameboy::EMULATOR;
@@ -11,12 +10,11 @@ use sdl2::pixels::PixelFormatEnum;
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
-const SCALE: u32 = 3;
 
-const CPU_CLOCK: i32 = 4194304;
+const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
-    let rom = std::fs::read("roms/pred.gb").unwrap();
+    let rom = std::fs::read("roms/test_cart.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
 
     //games start at address 0x0100
@@ -30,10 +28,10 @@ fn main() {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Failed to initialize SDL2: {}", e);
-            return; 
+            return;
         }
     };
-        let texture_creator = canvas.texture_creator();
+    let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, WIDTH, HEIGHT)
@@ -80,8 +78,8 @@ fn main() {
 
         // Then render the current video memory
         emulator.gpu.render();
-        let framebuffer = emulator.gpu.get_framebuffer();
-        texture.update(None, framebuffer, 160 * 3).unwrap();
+        let fb = emulator.gpu.get_framebuffer();
+        texture.update(None, fb, 160 * 3).unwrap();
         canvas.clear();
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();

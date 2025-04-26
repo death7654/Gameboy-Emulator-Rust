@@ -23,25 +23,65 @@ impl RAM {
     pub fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x7FFF => self.rom.get(address as usize).copied().unwrap_or(0xFF),
-            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize], // VRAM
-            0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize], // WRAM
-            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],  // OAM
-            0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],   // I/O
-            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize], // HRAM
+            0x8000..=0x9FFF => self
+                .vram
+                .get((address - 0x8000) as usize)
+                .copied()
+                .unwrap_or(0xFF),
+            0xC000..=0xDFFF => self
+                .wram
+                .get((address - 0xC000) as usize)
+                .copied()
+                .unwrap_or(0xFF),
+            0xFE00..=0xFE9F => self
+                .oam
+                .get((address - 0xFE00) as usize)
+                .copied()
+                .unwrap_or(0xFF),
+            0xFF00..=0xFF7F => self
+                .io
+                .get((address - 0xFF00) as usize)
+                .copied()
+                .unwrap_or(0xFF),
+            0xFF80..=0xFFFE => self
+                .hram
+                .get((address - 0xFF80) as usize)
+                .copied()
+                .unwrap_or(0xFF),
             0xFFFF => self.interrupt_enable,
-            _ => 0xFF, // Unusable or not implemented
+            _ => 0xFF, // Unusable or unmapped memory
         }
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
         match address {
-            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize] = value,
-            0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize] = value,
-            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
-            0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize] = value,
-            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
+            0x8000..=0x9FFF => {
+                if let Some(slot) = self.vram.get_mut((address - 0x8000) as usize) {
+                    *slot = value;
+                }
+            }
+            0xC000..=0xDFFF => {
+                if let Some(slot) = self.wram.get_mut((address - 0xC000) as usize) {
+                    *slot = value;
+                }
+            }
+            0xFE00..=0xFE9F => {
+                if let Some(slot) = self.oam.get_mut((address - 0xFE00) as usize) {
+                    *slot = value;
+                }
+            }
+            0xFF00..=0xFF7F => {
+                if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
+                    *slot = value;
+                }
+            }
+            0xFF80..=0xFFFE => {
+                if let Some(slot) = self.hram.get_mut((address - 0xFF80) as usize) {
+                    *slot = value;
+                }
+            }
             0xFFFF => self.interrupt_enable = value,
-            _ => {}
+            _ => {} // Ignore writes to unmapped memory
         }
     }
 }
