@@ -18,7 +18,7 @@ fn main() {
     let mut emulator = EMULATOR::new(rom);
 
     //games start at address 0x0100
-    emulator.cpu.registers.set_pc(0x0100);
+    emulator.cpu.registers.set_pc(0x0000);
 
     //intialize input
     emulator.cpu.ram.borrow_mut().write(0xFF00, 0b11111111);
