@@ -17,7 +17,8 @@ pub struct CPU {
     pub halted: bool,
     pub stopped: bool,
 
-    pub div_counter: u64,
+    div_counter: u64,
+    timer_counter: u64,
 }
 impl CPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
@@ -29,24 +30,53 @@ impl CPU {
             halted: false,
             stopped: false,
             div_counter: 0,
+            timer_counter: 0,
         }
     }
     pub fn fetch(&mut self) -> u8 {
         let opcode = self.ram.borrow().read(self.registers.get_pc());
-        self.registers.set_pc(self.registers.get_pc() + 1);
+        self.registers.set_pc(self.registers.get_pc().wrapping_add(1));
         opcode
     }
     pub fn timer(&mut self, cycles: u64) {
         self.div_counter += cycles;
-    
+
         if self.div_counter >= 256 {
-            self.div_counter -= 256; 
-            let new_div = self.ram.borrow().read(0xFF04).wrapping_add(1); 
-            self.ram.borrow_mut().write(0xFF04, new_div); 
+            self.div_counter -= 256;
+            let new_div = self.ram.borrow().read(0xFF04).wrapping_add(1);
+            self.ram.borrow_mut().write(0xFF04, new_div);
         }
-    
+        let ff07 = self.ram.borrow().read(0xFF07);
+
+        let tac_enabled = (ff07 & 0b0000_0100) != 0;
+        if tac_enabled {
+            let timer_speed = match ff07 & 0b0000_0011 {
+                0 => 1024,
+                1 => 16,
+                2 => 64,
+                3 => 256,
+                _ => 1024,
+            };
+            self.timer_counter += cycles;
+
+            if self.timer_counter >= timer_speed {
+                self.timer_counter -= timer_speed;
+
+                let value = self.ram.borrow().read(0xFF05).wrapping_add(1);
+                self.ram.borrow_mut().write(0xFF05, value);
+
+                if value == 0 {
+                    let tma = self.ram.borrow().read(0xFF06);
+                    self.ram.borrow_mut().write(0xFF05, tma);
+
+                    let mut interrupt_flags = self.ram.borrow().read(0xFF0F);
+                    interrupt_flags |= 0x04;
+                    self.ram.borrow_mut().write(0xFF0F, interrupt_flags);
+                }
+            }
+        }
     }
-    
+
     pub fn execute(&mut self, opcode: u8) {
         let initial_cycles = self.cycles;
         match opcode {
