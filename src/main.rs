@@ -32,7 +32,8 @@ Tests Passed
 fn main() {
     //let rom = std::fs::read("roms/drmario.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim11.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
 
@@ -57,8 +58,11 @@ fn main() {
         .unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
 
+    //enable_test_pattern(&mut emulator.ram.borrow_mut());
+
     'gameloop: loop {
         // Input Handling
+
         for evt in event_pump.poll_iter() {
             let current = emulator.ram.borrow().read(0xFF00);
             match evt {
@@ -96,7 +100,6 @@ fn main() {
                 continue;
             }
         }
-        
 
         // CPU Execution
         let instructions_per_frame = CPU_CLOCK / 60;
@@ -151,4 +154,47 @@ pub fn enable_test_pattern(ram: &mut RAM) {
     for i in 0..(32 * 32) {
         ram.vram[0x1800 + i] = 0; // Tile 0
     }
+}
+
+#[test]
+fn test_halt_exits_on_timer_interrupt() {
+    use crate::gameboy::cpu::CPU;
+    use crate::gameboy::ram::RAM;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let rom = vec![0; 0x8000];
+    let ram = Rc::new(RefCell::new(RAM::new(rom)));
+    let mut cpu = CPU::new(ram.clone());
+
+    ram.borrow_mut().write(0xFF07, 0x05);
+
+    ram.borrow_mut().write(0xFF05, 0x00);
+
+    ram.borrow_mut().write(0xFF0F, 0x00);
+
+    cpu.halted = true;
+
+    println!("Halt: {}", cpu.halted);
+
+    let mut if_reg = ram.borrow().read(0xFF0F);
+
+    println!("if reg: {:08b}", if_reg);
+    if_reg |= 1 << 2; // Set bit 2 (Timer interrupt)
+    ram.borrow_mut().write(0xFF0F, if_reg);
+
+    cpu.handle_interrupt();
+    println!("Halt: {}", cpu.halted);
+    println!("if reg: {:08b}", if_reg);
+
+    assert!(
+        !cpu.halted,
+        "CPU should exit HALT when timer interrupt occurs"
+    );
+
+    let if_reg = ram.borrow().read(0xFF0F);
+    assert!(
+        (if_reg & (1 << 2)) != 0,
+        "Timer interrupt should be pending"
+    );
 }
