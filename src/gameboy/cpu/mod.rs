@@ -4,7 +4,6 @@ use crate::gameboy::RAM;
 use registers::FLAGS;
 use registers::REGISTERS;
 
-use std::cell::Ref;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -34,9 +33,10 @@ impl CPU {
         }
     }
     pub fn fetch(&mut self) -> u8 {
-        let opcode = self.ram.borrow().read(self.registers.get_pc());
-        self.registers.set_pc(self.registers.get_pc().wrapping_add(1));
-        opcode
+        let pc = self.registers.get_pc();
+        let value = self.ram.borrow().read(pc);
+        self.registers.set_pc(pc.wrapping_add(1));
+        value
     }
     pub fn timer(&mut self, cycles: u64) {
         self.div_counter += cycles;
@@ -46,17 +46,21 @@ impl CPU {
             let new_div = self.ram.borrow().read(0xFF04).wrapping_add(1);
             self.ram.borrow_mut().write(0xFF04, new_div);
         }
+
+        // Read timer control (TAC) register
         let ff07 = self.ram.borrow().read(0xFF07);
 
+        // Check if the timer is enabled
         let tac_enabled = (ff07 & 0b0000_0100) != 0;
         if tac_enabled {
             let timer_speed = match ff07 & 0b0000_0011 {
-                0 => 1024,
-                1 => 16,
-                2 => 64,
-                3 => 256,
-                _ => 1024,
+                0 => 1024, // Timer runs at 4096 Hz
+                1 => 16,   // Timer runs at 262144 Hz
+                2 => 64,   // Timer runs at 65536 Hz
+                3 => 256,  // Timer runs at 16384 Hz
+                _ => 1024, // Default case for safety
             };
+
             self.timer_counter += cycles;
 
             if self.timer_counter >= timer_speed {
@@ -75,6 +79,63 @@ impl CPU {
                 }
             }
         }
+    }
+
+    pub fn handle_interrupt(&mut self) {
+        if !self.ime {
+            return;
+        }
+
+        let ie = self.ram.borrow().read(0xFFFF);
+        let if_ = self.ram.borrow().read(0xFF0F);
+
+        // Determine which interrupts are requested and enabled
+        let pending_interrupts = ie & if_;
+        if pending_interrupts == 0 {
+            return;
+        }
+
+        // Handle interrupts in priority order
+        for (bit, address) in [
+            (0, 0x0040), // V-Blank
+            (1, 0x0048), // LCD STAT
+            (2, 0x0050), // Timer
+            (3, 0x0058), // Serial
+            (4, 0x0060), // Joypad
+        ] {
+            if (pending_interrupts & (1 << bit)) != 0 {
+                self.service_interrupt(bit, address);
+                break;
+            }
+        }
+    }
+
+    fn service_interrupt(&mut self, bit: u8, address: u16) {
+
+        self.halted = false;
+        
+        let mut if_ = self.ram.borrow().read(0xFF0F);
+        if_ &= !(1 << bit);
+        self.ram.borrow_mut().write(0xFF0F, if_);
+
+        self.ime = false;
+
+        let pc = self.registers.get_pc();
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram
+            .borrow_mut()
+            .write(self.registers.get_sp(), (pc >> 8) as u8); // High byte
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram
+            .borrow_mut()
+            .write(self.registers.get_sp(), (pc & 0xFF) as u8); // Low byte
+
+        // Jump to the interrupt handler address
+        self.registers.set_pc(address);
+
+        self.cycles += 20;
     }
 
     pub fn execute(&mut self, opcode: u8) {
@@ -123,30 +184,21 @@ impl CPU {
             }
             0x07 => {
                 let a = self.registers.get_a();
-                let msb = (a & 0b1000_0000) >> 7;
-                let result = (a << 1) | msb;
-
+                let carry = (a & 0x80) != 0;
+                
+                
+                let result = a.rotate_left(1);
+                
                 self.registers.set_a(result);
-
-                if result == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                
+               
+                let mut new_flags: u8 = 0;
+                if carry {
+                    new_flags |= FLAGS::C as u8;
                 }
-
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8));
-
-                if msb != 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::C as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
-                }
-                self.cycles += 8;
+                self.registers.set_f(new_flags);
+                
+                self.cycles += 4;
             }
             0x08 => {
                 //load load sp into the address from ram
@@ -404,6 +456,7 @@ impl CPU {
                 let data = self.registers.get_a();
                 let address = self.registers.get_hl();
                 self.ram.borrow_mut().write(address, data);
+                self.registers.set_hl(self.registers.get_hl().wrapping_add(1));
 
                 self.cycles += 8;
             }
@@ -426,48 +479,51 @@ impl CPU {
                 self.cycles += 8;
             }
             0x27 => {
-                let mut a = self.registers.get_a();
-                let mut adjust = 0;
-                let carry_flag = self.registers.get_f() & FLAGS::C as u8 != 0;
-                let half_carry_flag = self.registers.get_f() & FLAGS::H as u8 != 0;
-                let subtract_flag = self.registers.get_f() & FLAGS::N as u8 != 0;
-
-                if !subtract_flag {
-                    if a > 0x99 || carry_flag {
-                        adjust |= 0x60;
-                        self.registers
-                            .set_f(self.registers.get_f() | FLAGS::C as u8);
+                let a = self.registers.get_a();
+                let mut f = self.registers.get_f();
+            
+                let n = (f & FLAGS::N as u8) != 0;
+                let c = (f & FLAGS::C as u8) != 0;
+                let h = (f & FLAGS::H as u8) != 0;
+            
+                let mut result = a;
+            
+                if !n {
+                    if c || a > 0x99 {
+                        result = result.wrapping_add(0x60);
+                        f |= FLAGS::C as u8; // Set carry if adjustment applied
                     }
-                    if (a & 0x0F) > 0x09 || half_carry_flag {
-                        adjust |= 0x06;
+                    if h || (a & 0x0F) > 0x09 {
+                        result = result.wrapping_add(0x06);
                     }
                 } else {
-                    if carry_flag {
-                        adjust |= 0x60;
+                    if c {
+                        result = result.wrapping_sub(0x60);
                     }
-                    if half_carry_flag {
-                        adjust |= 0x06;
+                    if h {
+                        result = result.wrapping_sub(0x06);
                     }
+                    // NOTE: Carry flag is NOT changed during subtraction
                 }
-
-                a = a.wrapping_add(adjust);
-                self.registers.set_a(a);
-
-                // Update Z flag (if result is zero)
-                if a == 0 {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::Z as u8);
+            
+                // Update Zero flag
+                if result == 0 {
+                    f |= FLAGS::Z as u8;
                 } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::Z as u8));
+                    f &= !(FLAGS::Z as u8);
                 }
-
-                // Clear H flag
-                self.registers
-                    .set_f(self.registers.get_f() & !(FLAGS::H as u8));
-
+            
+                // Half-carry is always cleared after DAA
+                f &= !(FLAGS::H as u8);
+            
+                // N flag remains unchanged
+            
+                self.registers.set_a(result);
+                self.registers.set_f(f);
                 self.cycles += 4;
             }
+              
+             
             0x28 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
@@ -658,26 +714,25 @@ impl CPU {
                 let sp = self.registers.get_sp();
                 let result = hl.wrapping_add(sp);
                 self.registers.set_hl(result);
-
-                if (hl & 0xFFF) + (sp & 0xFFF) > 0xFFF {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::H as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::H as u8));
+            
+                // Preserve the current Z flag.
+                let z_flag = self.registers.get_f() & (FLAGS::Z as u8);
+                // For ADD HL,SP: Clear N; start with Z preserved.
+                let mut f = z_flag;
+            
+                // Set H flag if a carry occurs from bit 11 (lower 12 bits)
+                if (hl & 0x0FFF) + (sp & 0x0FFF) > 0x0FFF {
+                    f |= FLAGS::H as u8;
                 }
-
-                // Set C flag if carry occurs from bit 15 to bit 16
+            
                 if hl > 0xFFFF - sp {
-                    self.registers
-                        .set_f(self.registers.get_f() | FLAGS::C as u8);
-                } else {
-                    self.registers
-                        .set_f(self.registers.get_f() & !(FLAGS::C as u8));
+                    f |= FLAGS::C as u8;
                 }
-
+            
+                self.registers.set_f(f);
+            
                 self.cycles += 8;
-            }
+            }            
             0x3A => {
                 let data = self.ram.borrow().read(self.registers.get_hl());
                 self.registers
@@ -1820,26 +1875,9 @@ impl CPU {
                 self.cycles += 4;
             }
             0xFE => {
-                let a = self.registers.get_a();
                 let n8 = self.ram.borrow().read(self.registers.get_and_inc_pc());
-
-                let (result, borrow) = a.overflowing_sub(n8);
-
-                let mut f = FLAGS::N as u8;
-                if result == 0 {
-                    f |= FLAGS::Z as u8;
-                }
-
-                if (a & 0x0F) < (n8 & 0x0F) {
-                    f |= FLAGS::H as u8;
-                }
-
-                if borrow {
-                    f |= FLAGS::C as u8;
-                }
-
-                self.registers.set_f(f);
-                self.cycles += 8;
+                self.compare(n8);
+                self.cycles += 4;
             }
             0xFF => {
                 self.reset(0x38);
@@ -1847,6 +1885,17 @@ impl CPU {
         }
 
         let final_cycles = self.cycles.saturating_sub(initial_cycles);
+
+        if self.ime && (self.ram.borrow().read(0xFF0F) != 0) {
+            println!(
+                "Interrupt Triggered! Flags: {:02X}",
+                self.ram.borrow().read(0xFF0F)
+            );
+            self.handle_interrupt();
+            self.ime = true; // Re-enable IME
+        }
+
+        // Update the timer with remaining cycles after servicing interrupts
         self.timer(final_cycles);
     }
     fn cb(&mut self, opcode: u8) {
@@ -2521,8 +2570,9 @@ impl CPU {
             }
             0xC6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 0));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 0);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xC7 => {
@@ -2555,8 +2605,9 @@ impl CPU {
             }
             0xCE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 1));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 1);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xCF => {
@@ -2589,8 +2640,9 @@ impl CPU {
             }
             0xD6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 2));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 2);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xD7 => {
@@ -2623,8 +2675,9 @@ impl CPU {
             }
             0xDE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 3));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 3);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xDF => {
@@ -2657,8 +2710,9 @@ impl CPU {
             }
             0xE6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 4));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 4);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xE7 => {
@@ -2691,8 +2745,9 @@ impl CPU {
             }
             0xEE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 5));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 5);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xEF => {
@@ -2725,8 +2780,9 @@ impl CPU {
             }
             0xF6 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 6));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 6);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xF7 => {
@@ -2759,8 +2815,9 @@ impl CPU {
             }
             0xFE => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
-                self.ram.borrow_mut().write(address, data & (1 << 7));
+                let byte = self.ram.borrow().read(address);
+                let new_byte = byte | (1 << 7);
+                self.ram.borrow_mut().write(address, new_byte);
                 self.cycles += 16;
             }
             0xFF => {
@@ -2835,7 +2892,6 @@ impl CPU {
         self.cycles += 8;
         value | (1 << bit)
     }
-
     fn add_8bit(&mut self, b: u8) {
         let a = self.registers.get_a();
         let (result, carry) = a.overflowing_add(b); // Separate carry result
@@ -2867,7 +2923,6 @@ impl CPU {
         self.registers.set_f(f);
         self.cycles += 4;
     }
-
     fn add_with_carry(&mut self, b: u8) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
@@ -2894,40 +2949,35 @@ impl CPU {
         } else {
             f &= !(FLAGS::C as u8);
         }
+        self.registers.set_a(result);
 
         self.registers.set_f(f);
         self.cycles += 4;
     }
     fn sub_8bit(&mut self, b: u8) {
         let a = self.registers.get_a();
-        let (result, borrow) = a.overflowing_sub(b); // Separate carry result
+        let (result, borrow) = a.overflowing_sub(b);
 
-        let mut f = self.registers.get_f() | (FLAGS::N as u8);
+        let mut f = self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+        f |= FLAGS::N as u8;
 
-        self.registers.set_a(result);
-        // Z flag
         if result == 0 {
             f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
         }
 
-        // H flag
-        if (a & 0x0F) < (b & 0x0F) {
+        if (a & 0x0F).wrapping_sub(b & 0x0F) & 0x10 != 0 {
             f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
         }
 
         if borrow {
             f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8);
         }
 
+        self.registers.set_a(result);
         self.registers.set_f(f);
         self.cycles += 4;
     }
+
     fn sub_with_carry(&mut self, b: u8) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
@@ -3011,34 +3061,34 @@ impl CPU {
         self.cycles += 4;
     }
 
-    fn compare(&mut self, b: u8) {
+    fn compare(&mut self, n8: u8) {
         let a = self.registers.get_a();
-        let (result, borrow) = a.overflowing_sub(b); // Simulates subtraction for flag updates
+        let result = a.wrapping_sub(n8);
 
-        let mut f = self.registers.get_f();
-        f |= FLAGS::N as u8;
+        let mut f = self.registers.get_f() | FLAGS::N as u8;
 
         if result == 0 {
             f |= FLAGS::Z as u8;
         } else {
-            f &= !(FLAGS::Z as u8)
+            f &= !(FLAGS::Z as u8);
         }
 
-        if (a & 0x0F) < (b & 0x0F) {
+        if (a & 0x0F) < (n8 & 0x0F) {
             f |= FLAGS::H as u8;
         } else {
-            f &= !(FLAGS::H as u8)
+            f &= !(FLAGS::H as u8);
         }
 
-        if borrow {
+        if a < n8 {
             f |= FLAGS::C as u8;
         } else {
-            f &= !(FLAGS::C as u8)
+            f &= !(FLAGS::C as u8);
         }
 
         self.registers.set_f(f);
-        self.cycles += 4;
+        self.cycles += 8;
     }
+
     fn reset(&mut self, address: u16) {
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
@@ -3066,26 +3116,28 @@ impl CPU {
             bool = (value & 0x01) != 0;
             value = value.rotate_right(1);
         }
-
+    
         let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
-
+    
         if value == 0 {
             f |= FLAGS::Z as u8;
         } else {
             f &= !(FLAGS::Z as u8)
         }
-
+    
         if bool {
             f |= FLAGS::C as u8;
         } else {
             f &= !(FLAGS::C as u8)
         }
-
+    
         self.registers.set_f(f);
         self.cycles += 8;
-
+    
         value
     }
+    
+    
     fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
         let bool;
         let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
@@ -3118,34 +3170,38 @@ impl CPU {
     }
 
     fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
-        let msb = value & 0x80;
-        let lsb_bool = (value & 0x01) != 0;
-        let msb_bool = (value & 0x80) != 0;
-        let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+        // Read the old flags, but we’re going to build the new flags from scratch.
+        let mut f: u8 = 0;
+    
         if type_ == 0 {
+           
+            let msb = (value & 0x80) != 0;
             value <<= 1;
-            if msb_bool {
+            if msb {
                 f |= FLAGS::C as u8;
-            } else {
-                f &= !(FLAGS::C as u8)
             }
         } else {
+           
+            let lsb = (value & 0x01) != 0;
+            let msb = value & 0x80;
             value = (value >> 1) | msb;
-            if lsb_bool {
+            if lsb {
                 f |= FLAGS::C as u8;
-            } else {
-                f &= !(FLAGS::C as u8)
             }
         }
-
+        
         if value == 0 {
             f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
         }
-
+    
         self.registers.set_f(f);
         self.cycles += 8;
+        
         value
     }
+    
     fn swap(&mut self, value: u8) -> u8 {
         let result = (value >> 4) | (value << 4);
         let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
@@ -3198,7 +3254,5 @@ impl CPU {
         self.registers.set_f(f);
         self.cycles += 8;
     }
-    pub fn get_vram(&self) -> Ref<[u8; 0x2000]> {
-        Ref::map(self.ram.borrow(), |ram: &RAM| &ram.vram)
-    }
+
 }

@@ -1,3 +1,4 @@
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FLAGS {
     Z = 0b1000_0000,
     N = 0b0100_0000,
@@ -19,16 +20,16 @@ pub struct REGISTERS {
 impl REGISTERS {
     pub fn new() -> REGISTERS {
         REGISTERS {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            f: 0,
-            h: 0,
-            l: 0,
-            sp: 0,
-            pc: 0,
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
+            f: 0xB0,
+            pc: 0x100,
+            sp: 0xFFFE,
         }
     }
     pub fn get_a(&self) -> u8 {
@@ -156,8 +157,4 @@ impl REGISTERS {
         ret_pc
     }
 
-    pub fn inc_pc(&mut self) -> u16 {
-        self.pc += 1;
-        self.pc
-    }
 }

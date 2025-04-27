@@ -14,7 +14,6 @@ pub(crate) mod ram;
 pub struct EMULATOR {
     pub cpu: cpu::CPU,
     pub gpu: gpu::GPU,
-    pub ram: Rc<RefCell<RAM>>,
 }
 
 impl EMULATOR {
@@ -27,7 +26,6 @@ impl EMULATOR {
         EMULATOR {
             cpu,
             gpu,
-            ram: shared_ram,
         }
     }
 }
