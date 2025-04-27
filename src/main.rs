@@ -1,8 +1,5 @@
 mod gameboy;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use gameboy::input::get_input;
 use gameboy::lcd;
 use gameboy::ram::RAM;
@@ -17,9 +14,9 @@ const HEIGHT: u32 = 144;
 
 const CPU_CLOCK: u32 = 4194304;
 
-
 /*
 Tests Passed
+01-special.gb
 03-op sp,hl.gb
 04-op r,imm.gb
 05-op rp.gb
@@ -33,16 +30,17 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/mario_land.gb").unwrap();
+    //let rom = std::fs::read("roms/drmario.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
     let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
 
     //games start at address 0x0100
     emulator.cpu.registers.set_pc(0x0100);
 
     //intialize input
-    emulator.cpu.ram.borrow_mut().write(0xFF00, 0b11111111);
+    // emulator.ram.borrow_mut().write(0xFF00, 0b11111111);
 
     //intialize window
     let (sdl, mut canvas) = match lcd::new() {
@@ -62,49 +60,57 @@ fn main() {
     'gameloop: loop {
         // Input Handling
         for evt in event_pump.poll_iter() {
+            let current = emulator.ram.borrow().read(0xFF00);
             match evt {
                 Event::Quit { .. } => break 'gameloop,
-                Event::KeyDown { keycode: Some(key), .. } => {
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
                         println!("Key {:?} pressed. Resuming CPU...", key);
                     }
-                    // Update joypad register
-    
-                    let current = emulator.cpu.ram.borrow().read(0xFF00);
+
                     let updated = get_input(key, true, current);
-                    emulator.cpu.ram.borrow_mut().write(0xFF00, updated);
-                    
-                    // Set joypad interrupt flag (bit 4 in the IF register)
-                    let mut if_reg = emulator.cpu.ram.borrow().read(0xFF0F);
-                    if_reg |= 1 << 3;
-                    emulator.cpu.ram.borrow_mut().write(0xFF0F, if_reg);
+                    emulator.ram.borrow_mut().write(0xFF00, updated);
+
+                    let mut if_reg = emulator.ram.borrow().read(0xFF0F);
+                    if_reg |= 1 << 4;
+                    emulator.ram.borrow_mut().write(0xFF0F, if_reg);
                 }
-                Event::KeyUp { keycode: Some(key), .. } => {
-                    let current = emulator.cpu.ram.borrow().read(0xFF00);
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } => {
                     let updated = get_input(key, false, current);
-                    emulator.cpu.ram.borrow_mut().write(0xFF00, updated);
+                    emulator.ram.borrow_mut().write(0xFF00, updated);
                 }
                 _ => {}
             }
         }
-        
 
-        if emulator.cpu.stopped || emulator.cpu.halted{
+        if emulator.cpu.stopped || emulator.cpu.halted {
             emulator.cpu.handle_interrupt();
-            continue;
+            if emulator.cpu.stopped {
+                // No pending interrupts; simulate idle cycles
+                emulator.cpu.cycles += 4;
+                continue;
+            }
         }
+        
 
         // CPU Execution
         let instructions_per_frame = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
             let opcode = emulator.cpu.fetch();
-            let pc = emulator.cpu.registers.get_pc();
-
             emulator.cpu.execute(opcode);
+            if emulator.cpu.ime && (emulator.ram.borrow().read(0xFF0F) != 0) {
+                println!(
+                    "Interrupt Triggered! Flags: {:02X}",
+                    emulator.ram.borrow().read(0xFF0F)
+                );
+                emulator.cpu.handle_interrupt();
+            }
         }
-
-        //check_blargg_output(&emulator.cpu.ram);
 
         // Render current video memory
         emulator.gpu.render();

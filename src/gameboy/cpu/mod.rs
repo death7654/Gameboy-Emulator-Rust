@@ -82,20 +82,21 @@ impl CPU {
     }
 
     pub fn handle_interrupt(&mut self) {
+        let ie = self.ram.borrow().read(0xFFFF);     
+        let if_val = self.ram.borrow().read(0xFF0F);    
+        let pending = ie & if_val;                     
+    
+        if pending == 0 {
+            return;
+        }
+    
+        self.halted = false;
+    
         if !self.ime {
+            self.halt_bug();
             return;
         }
-
-        let ie = self.ram.borrow().read(0xFFFF);
-        let if_ = self.ram.borrow().read(0xFF0F);
-
-        // Determine which interrupts are requested and enabled
-        let pending_interrupts = ie & if_;
-        if pending_interrupts == 0 {
-            return;
-        }
-
-        // Handle interrupts in priority order
+    
         for (bit, address) in [
             (0, 0x0040), // V-Blank
             (1, 0x0048), // LCD STAT
@@ -103,40 +104,56 @@ impl CPU {
             (3, 0x0058), // Serial
             (4, 0x0060), // Joypad
         ] {
-            if (pending_interrupts & (1 << bit)) != 0 {
+            if (pending & (1 << bit)) != 0 {
                 self.service_interrupt(bit, address);
                 break;
             }
         }
     }
-
+    
     fn service_interrupt(&mut self, bit: u8, address: u16) {
-
         self.halted = false;
-        
-        let mut if_ = self.ram.borrow().read(0xFF0F);
-        if_ &= !(1 << bit);
-        self.ram.borrow_mut().write(0xFF0F, if_);
-
+        println!(
+            "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b}",
+            self.ime,
+            self.ram.borrow().read(0xFF0F),
+            self.ram.borrow().read(0xFFFF)
+        );
+    
+        let mut if_val = self.ram.borrow().read(0xFF0F);
+        if_val &= !(1 << bit);
+        self.ram.borrow_mut().write(0xFF0F, if_val);
+    
         self.ime = false;
-
+    
         let pc = self.registers.get_pc();
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.registers.set_sp(self.registers.get_sp().wrapping_sub(1));
         self.ram
             .borrow_mut()
-            .write(self.registers.get_sp(), (pc >> 8) as u8); // High byte
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
+            .write(self.registers.get_sp(), (pc >> 8) as u8);
+        self.registers.set_sp(self.registers.get_sp().wrapping_sub(1));
         self.ram
             .borrow_mut()
-            .write(self.registers.get_sp(), (pc & 0xFF) as u8); // Low byte
-
-        // Jump to the interrupt handler address
+            .write(self.registers.get_sp(), (pc & 0xFF) as u8);
+    
         self.registers.set_pc(address);
-
+    
         self.cycles += 20;
+    
+        println!(
+            "After servicing: IF: {:08b}, PC: {:04X}, SP: {:04X}",
+            self.ram.borrow().read(0xFF0F),
+            self.registers.get_pc(),
+            self.registers.get_sp()
+        );
     }
+    
+    pub fn halt_bug(&mut self) {
+        let opcode = self.fetch();
+        self.execute(opcode);
+        self.halted = false;
+    }
+    
 
     pub fn execute(&mut self, opcode: u8) {
         let initial_cycles = self.cycles;
@@ -144,7 +161,6 @@ impl CPU {
             0x00 => {
                 //NOP
                 self.cycles += 4;
-                return;
             }
             0x01 => {
                 //Load 2 bytes into register BC
@@ -185,19 +201,17 @@ impl CPU {
             0x07 => {
                 let a = self.registers.get_a();
                 let carry = (a & 0x80) != 0;
-                
-                
+
                 let result = a.rotate_left(1);
-                
+
                 self.registers.set_a(result);
-                
-               
+
                 let mut new_flags: u8 = 0;
                 if carry {
                     new_flags |= FLAGS::C as u8;
                 }
                 self.registers.set_f(new_flags);
-                
+
                 self.cycles += 4;
             }
             0x08 => {
@@ -456,7 +470,8 @@ impl CPU {
                 let data = self.registers.get_a();
                 let address = self.registers.get_hl();
                 self.ram.borrow_mut().write(address, data);
-                self.registers.set_hl(self.registers.get_hl().wrapping_add(1));
+                self.registers
+                    .set_hl(self.registers.get_hl().wrapping_add(1));
 
                 self.cycles += 8;
             }
@@ -481,13 +496,13 @@ impl CPU {
             0x27 => {
                 let a = self.registers.get_a();
                 let mut f = self.registers.get_f();
-            
+
                 let n = (f & FLAGS::N as u8) != 0;
                 let c = (f & FLAGS::C as u8) != 0;
                 let h = (f & FLAGS::H as u8) != 0;
-            
+
                 let mut result = a;
-            
+
                 if !n {
                     if c || a > 0x99 {
                         result = result.wrapping_add(0x60);
@@ -505,25 +520,24 @@ impl CPU {
                     }
                     // NOTE: Carry flag is NOT changed during subtraction
                 }
-            
+
                 // Update Zero flag
                 if result == 0 {
                     f |= FLAGS::Z as u8;
                 } else {
                     f &= !(FLAGS::Z as u8);
                 }
-            
+
                 // Half-carry is always cleared after DAA
                 f &= !(FLAGS::H as u8);
-            
+
                 // N flag remains unchanged
-            
+
                 self.registers.set_a(result);
                 self.registers.set_f(f);
                 self.cycles += 4;
             }
-              
-             
+
             0x28 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
@@ -714,25 +728,25 @@ impl CPU {
                 let sp = self.registers.get_sp();
                 let result = hl.wrapping_add(sp);
                 self.registers.set_hl(result);
-            
+
                 // Preserve the current Z flag.
                 let z_flag = self.registers.get_f() & (FLAGS::Z as u8);
                 // For ADD HL,SP: Clear N; start with Z preserved.
                 let mut f = z_flag;
-            
+
                 // Set H flag if a carry occurs from bit 11 (lower 12 bits)
                 if (hl & 0x0FFF) + (sp & 0x0FFF) > 0x0FFF {
                     f |= FLAGS::H as u8;
                 }
-            
+
                 if hl > 0xFFFF - sp {
                     f |= FLAGS::C as u8;
                 }
-            
+
                 self.registers.set_f(f);
-            
+
                 self.cycles += 8;
-            }            
+            }
             0x3A => {
                 let data = self.ram.borrow().read(self.registers.get_hl());
                 self.registers
@@ -1885,15 +1899,6 @@ impl CPU {
         }
 
         let final_cycles = self.cycles.saturating_sub(initial_cycles);
-
-        if self.ime && (self.ram.borrow().read(0xFF0F) != 0) {
-            println!(
-                "Interrupt Triggered! Flags: {:02X}",
-                self.ram.borrow().read(0xFF0F)
-            );
-            self.handle_interrupt();
-            self.ime = true; // Re-enable IME
-        }
 
         // Update the timer with remaining cycles after servicing interrupts
         self.timer(final_cycles);
@@ -3116,28 +3121,27 @@ impl CPU {
             bool = (value & 0x01) != 0;
             value = value.rotate_right(1);
         }
-    
+
         let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
-    
+
         if value == 0 {
             f |= FLAGS::Z as u8;
         } else {
             f &= !(FLAGS::Z as u8)
         }
-    
+
         if bool {
             f |= FLAGS::C as u8;
         } else {
             f &= !(FLAGS::C as u8)
         }
-    
+
         self.registers.set_f(f);
         self.cycles += 8;
-    
+
         value
     }
-    
-    
+
     fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
         let bool;
         let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
@@ -3172,16 +3176,14 @@ impl CPU {
     fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
         // Read the old flags, but we’re going to build the new flags from scratch.
         let mut f: u8 = 0;
-    
+
         if type_ == 0 {
-           
             let msb = (value & 0x80) != 0;
             value <<= 1;
             if msb {
                 f |= FLAGS::C as u8;
             }
         } else {
-           
             let lsb = (value & 0x01) != 0;
             let msb = value & 0x80;
             value = (value >> 1) | msb;
@@ -3189,19 +3191,19 @@ impl CPU {
                 f |= FLAGS::C as u8;
             }
         }
-        
+
         if value == 0 {
             f |= FLAGS::Z as u8;
         } else {
             f &= !(FLAGS::Z as u8);
         }
-    
+
         self.registers.set_f(f);
         self.cycles += 8;
-        
+
         value
     }
-    
+
     fn swap(&mut self, value: u8) -> u8 {
         let result = (value >> 4) | (value << 4);
         let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
@@ -3254,5 +3256,4 @@ impl CPU {
         self.registers.set_f(f);
         self.cycles += 8;
     }
-
 }
