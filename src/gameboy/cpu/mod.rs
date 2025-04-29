@@ -7,6 +7,9 @@ use registers::REGISTERS;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use std::fs::OpenOptions;
+use std::io::Write;
+
 //todo timer error
 
 pub struct CPU {
@@ -20,6 +23,7 @@ pub struct CPU {
 
     div_counter: u64,
     timer_counter: u64,
+    timer_overflow_delay: u64,
 }
 impl CPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
@@ -32,6 +36,51 @@ impl CPU {
             stopped: false,
             div_counter: 0,
             timer_counter: 0,
+            timer_overflow_delay: 0,
+        }
+    }
+    pub fn log_cpu_state(&self) {
+        // Retrieve register values (assumes you have these getter methods)
+        let a = self.registers.get_a();
+        let f = self.registers.get_f();
+        let b = self.registers.get_b();
+        let c = self.registers.get_c();
+        let d = self.registers.get_d();
+        let e = self.registers.get_e();
+        let h = self.registers.get_h();
+        let l = self.registers.get_l();
+        let sp = self.registers.get_sp();
+        let pc = self.registers.get_pc();
+
+        // Read 4 bytes from memory starting at PC for PCMEM output.
+        let pc_mem_bytes = [
+            self.ram.borrow().read(pc.wrapping_add(0)),
+            self.ram.borrow().read(pc.wrapping_add(1)),
+            self.ram.borrow().read(pc.wrapping_add(2)),
+            self.ram.borrow().read(pc.wrapping_add(3)),
+        ];
+
+        // Format the output string.
+        let log_line = format!(
+            "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
+            a, f, b, c, d, e, h, l,
+            sp,
+            pc,
+            pc_mem_bytes[0], pc_mem_bytes[1], pc_mem_bytes[2], pc_mem_bytes[3]
+        );
+
+        // Open "cpu_log.txt" in append mode (create if it doesn't exist)
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("cpu_log.log")
+        {
+            // Write the formatted log line into the file.
+            if let Err(err) = file.write_all(log_line.as_bytes()) {
+                println!("Failed to write to log file: {}", err);
+            }
+        } else {
+            println!("Failed to open log file for writing.");
         }
     }
     pub fn fetch(&mut self) -> u8 {
@@ -40,72 +89,61 @@ impl CPU {
         self.registers.set_pc(pc.wrapping_add(1));
         value
     }
-    
+
     pub fn timer(&mut self, cycles: u64) {
-        // ----- Update DIV (0xFF04) -----
         self.div_counter += cycles;
-        // Every 256 cycles increment the DIV register
-        while self.div_counter >= 256 {
-            self.div_counter -= 256;
-            let new_div = self.ram.borrow().read(0xFF04).wrapping_add(1);
-            self.ram.borrow_mut().write(0xFF04, new_div);
+        if self.div_counter >= 256 {
+            let div_increment = (self.div_counter / 256) as u8;
+            self.div_counter %= 256;
+            let current_div = self.ram.borrow().read(0xFF04);
+            let new_div = current_div.wrapping_add(div_increment);
+            self.ram.borrow_mut().update_div(new_div);
         }
     
-        // ----- Process Timer (TIMA, 0xFF05) -----
-        // Read the Timer Control register (TAC, 0xFF07)
         let tac = self.ram.borrow().read(0xFF07);
-    
-        // Check if the Timer is enabled (bit 2 of TAC)
-        if (tac & 0b0000_0100) == 0 {
-            return; // Timer is disabled, so exit
+        if tac & 0x04 == 0 {
+            return;
         }
     
-        // Determine timer speed based on TAC bits 0-1:
-        let timer_speed = match tac & 0b0000_0011 {
-            0 => 1024, // 4096 Hz → 1 tick per 1024 cycles
-            1 => 16,   // 262144 Hz → 1 tick per 16 cycles
-            2 => 64,   // 65536 Hz → 1 tick per 64 cycles
-            3 => 256,  // 16384 Hz → 1 tick per 256 cycles
-            _ => 1024, // Fallback for safety
+        let timer_speed = match tac & 0x03 {
+            0 => 1024, // 4096 Hz
+            1 => 16,   // 262144 Hz
+            2 => 64,   // 65536 Hz
+            3 => 256,  // 16384 Hz
+            _ => unreachable!("not valid"),
         };
     
-        // Accumulate timer cycles
-        self.timer_counter += cycles;
-        // Process all timer ticks that have elapsed
-        while self.timer_counter >= timer_speed {
-            self.timer_counter -= timer_speed;
-    
-            // Read the current TIMA value (0xFF05)
-            let tima = self.ram.borrow().read(0xFF05);
-            // Check for overflow
-            if tima == 0xFF {
-                // Timer overflow: reload TIMA from TMA (0xFF06)
+        if self.timer_overflow_delay > 0 {
+            if self.timer_overflow_delay > cycles {
+                self.timer_overflow_delay -= cycles;
+                return;
+            } else {
+                let leftover_cycles = cycles - self.timer_overflow_delay;
+                self.timer_overflow_delay = 0;
                 let tma = self.ram.borrow().read(0xFF06);
                 self.ram.borrow_mut().write(0xFF05, tma);
+                self.timer_counter = leftover_cycles;
+            }
+        } else {
+            self.timer_counter += cycles;
+        }
     
-                // Set the Timer interrupt flag in IF (bit 2 of 0xFF0F)
+        while self.timer_counter >= timer_speed {
+            self.timer_counter -= timer_speed;
+            let tima = self.ram.borrow().read(0xFF05);
+            if tima == 0xFF {
+                self.ram.borrow_mut().write(0xFF05, 0);
                 let mut if_reg = self.ram.borrow().read(0xFF0F);
-                if_reg |= 0x04; // Set bit 2
+                if_reg |= 0x04; // Set Timer interrupt flag
                 self.ram.borrow_mut().write(0xFF0F, if_reg);
+                self.timer_overflow_delay = 4;
+                break;
             } else {
-                // Otherwise, increment TIMA normally
                 self.ram.borrow_mut().write(0xFF05, tima.wrapping_add(1));
             }
         }
-        // println!(
-        //     "DIV: {:02X}, TIMA: {:02X}, TMA: {:02X}, TAC: {:02X}, IF: {:08b}, Timer Counter: {}, Cycles: {}",
-        //     self.ram.borrow().read(0xFF04),
-        //     self.ram.borrow().read(0xFF05),
-        //     self.ram.borrow().read(0xFF06),
-        //     self.ram.borrow().read(0xFF07),
-        //     self.ram.borrow().read(0xFF0F),
-        //     self.timer_counter,
-        //     cycles
-        // );
     }
     
-    
-
     pub fn handle_interrupt(&mut self) {
         let ie = self.ram.borrow().read(0xFFFF);
         let if_val = self.ram.borrow().read(0xFF0F);
@@ -137,20 +175,18 @@ impl CPU {
     }
 
     fn service_interrupt(&mut self, bit: u8, address: u16) {
-        println!(
-            "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
-            self.ime,
-            self.ram.borrow().read(0xFF0F),
-            self.ram.borrow().read(0xFFFF),
-            self.halted
-        );
+        // println!(
+        //     "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
+        //     self.ime,
+        //     self.ram.borrow().read(0xFF0F),
+        //     self.ram.borrow().read(0xFFFF),
+        //     self.halted
+        // );
         self.halted = false;
 
         let mut if_val = self.ram.borrow().read(0xFF0F);
-        println!("{:04b}", if_val);
         let mask = (1 as u8) << bit;
         if_val &= !(mask);
-        println!("{:04b}", if_val);
         self.ram.borrow_mut().write(0xFF0F, if_val);
 
         self.ime = false;
@@ -186,7 +222,7 @@ impl CPU {
         self.halted = false;
     }
 
-    pub fn execute(&mut self, opcode: u8) {
+    pub fn execute(&mut self, opcode: u8) -> u64 {
         let initial_cycles = self.cycles;
         match opcode {
             0x00 => {
@@ -333,7 +369,7 @@ impl CPU {
             0x10 => {
                 //not implemented, stop
 
-                println!("CPU Stopped");
+                //println!("CPU Stopped");
                 self.stopped = true;
                 self.cycles += 4;
             }
@@ -396,9 +432,9 @@ impl CPU {
             0x18 => {
                 //relative jump
                 let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
-                self.registers
-                    .set_pc(self.registers.get_pc().wrapping_add(jump as u16));
-                self.cycles += 12;
+            let new_pc = (self.registers.get_pc() as i16).wrapping_add(jump as i16) as u16;
+            self.registers.set_pc(new_pc);
+            self.cycles += 12;
             }
             0x19 => {
                 let hl = self.registers.get_hl();
@@ -1709,12 +1745,13 @@ impl CPU {
             }
             0xE0 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                let address = 0xFF00 | (offset as u16);
+                let address = (0xFF00 as u16).wrapping_add(offset as u16);
 
                 self.ram.borrow_mut().write(address, self.registers.get_a());
 
                 self.cycles += 12;
             }
+
             0xE1 => {
                 let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                 self.registers
@@ -1769,21 +1806,16 @@ impl CPU {
             }
             0xE8 => {
                 let sp = self.registers.get_sp();
-                let e8 = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8; // Read signed immediate value
-
-                let result = sp.wrapping_add(e8 as u16);
+                let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let result = (sp as i16).wrapping_add(imm as i16) as u16;
                 self.registers.set_sp(result);
-
                 let mut f = 0;
-
-                if (sp & 0x0F) + (e8 as u16 & 0x0F) > 0x0F {
+                if ((sp & 0x0F) as i16 + ((imm as i16) & 0x0F)) > 0x0F {
                     f |= FLAGS::H as u8;
                 }
-
-                if (sp & 0xFF) + (e8 as u16 & 0xFF) > 0xFF {
+                if ((sp & 0xFF) as i16 + ((imm as i16) & 0xFF)) > 0xFF {
                     f |= FLAGS::C as u8;
                 }
-
                 self.registers.set_f(f);
                 self.cycles += 16;
             }
@@ -1819,11 +1851,9 @@ impl CPU {
             }
             0xF0 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                let address = 0xFF00 | (offset as u16);
-
+                let address = 0xFF00u16.wrapping_add(offset as u16);
                 let value = self.ram.borrow().read(address);
                 self.registers.set_a(value);
-
                 self.cycles += 12;
             }
             0xF1 => {
@@ -1877,23 +1907,18 @@ impl CPU {
             }
             0xF8 => {
                 let sp = self.registers.get_sp();
-                let e8 = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8; // Signed immediate value
-
-                let result = sp.wrapping_add(e8 as u16);
-                self.registers.set_hl(result);
-
-                let mut f = 0;
-
-                if (sp & 0x0F) + (e8 as u16 & 0x0F) > 0x0F {
-                    f |= FLAGS::H as u8;
-                }
-
-                if (sp & 0xFF) + (e8 as u16 & 0xFF) > 0xFF {
-                    f |= FLAGS::C as u8;
-                }
-
-                self.registers.set_f(f);
-                self.cycles += 12;
+            let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+            let result = (sp as i16).wrapping_add(imm as i16) as u16;
+            self.registers.set_hl(result);
+            let mut f = 0;
+            if ((sp & 0x0F) as i16 + ((imm as i16) & 0x0F)) > 0x0F {
+                f |= FLAGS::H as u8;
+            }
+            if ((sp & 0xFF) as i16 + ((imm as i16) & 0xFF)) > 0xFF {
+                f |= FLAGS::C as u8;
+            }
+            self.registers.set_f(f);
+            self.cycles += 16;
             }
             0xF9 => {
                 self.registers.set_sp(self.registers.get_hl());
@@ -1929,10 +1954,7 @@ impl CPU {
             }
         }
 
-        let final_cycles = self.cycles.saturating_sub(initial_cycles);
-
-        // Update the timer with remaining cycles after servicing interrupts
-        self.timer(final_cycles);
+         self.cycles.saturating_sub(initial_cycles)
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {
@@ -3013,7 +3035,6 @@ impl CPU {
         self.registers.set_f(f);
         self.cycles += 4;
     }
-
     fn sub_with_carry(&mut self, b: u8) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag

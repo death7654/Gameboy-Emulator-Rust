@@ -152,8 +152,8 @@ impl REGISTERS {
         self.f = (value & 0x00F0) as u8;
     }
     pub fn get_and_inc_pc(&mut self) -> u16 {
-        let ret_pc = self.pc;
-        self.pc += 1;
+        let ret_pc = self.get_pc();
+        self.set_pc(ret_pc.wrapping_add(1));
         ret_pc
     }
 }

@@ -22,8 +22,7 @@ pub fn get_input(key: Keycode, pressed: bool, current: u8) -> u8 {
         (Keycode::Return, false) => data |= 0b00100000,
         (Keycode::Backslash, true) => data &= MASK_SELECT_DPAD,
         (Keycode::Backslash, false) => data |= 0b00010000,
-        (k, _) => eprintln!("Invalid key: {:?}", k),
+        (_, _) => {}
     }
-    //println!("Joypad state: {:#010b}", data);
     data
 }

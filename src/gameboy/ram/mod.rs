@@ -1,5 +1,5 @@
 pub struct RAM {
-    rom: Vec<u8>,
+    rom: Box<[u8; 0x8000]>,
     pub vram: [u8; 0x2000],
     pub wram: [u8; 0x2000],
     pub eram: [u8; 0x8000], // External Cartridge RAM
@@ -11,9 +11,11 @@ pub struct RAM {
 }
 
 impl RAM {
-    pub fn new(rom: Vec<u8>) -> Self {
+    pub fn new(rom_data: Vec<u8>) -> Self {
+        let mut rom = [0; 0x8000]; // Initialize with zeroed data
+        rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
         Self {
-            rom,
+            rom: Box::new(rom),
             vram: [0; 0x2000],
             wram: [0; 0x2000],
             eram: [0; 0x8000],
@@ -36,17 +38,20 @@ impl RAM {
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
             0xE000..=0xFDFF => self.wram[(address - 0xE000) as usize],
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
+            0xFF44 => 0x90,
             0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
-            _ => 0xFF,
+            _ => 0x00,
         }
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
+        //bllargs test output
         if address == 0xFF02 && value == 0x81 {
             self.handle_serial_output();
         }
+
         match address {
             // ROM Bank Switching
             0x2000..=0x3FFF => self.rom_bank = (value & 0x1F) as usize,
@@ -74,6 +79,11 @@ impl RAM {
                     *slot = value;
                 }
             }
+            0xFF04 => {
+                if let Some(slot) = self.io.get_mut((0x4) as usize) {
+                    *slot = 0x00;
+                }
+            }
             0xFF00..=0xFF7F => {
                 if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
                     *slot = value;
@@ -92,5 +102,11 @@ impl RAM {
         // Read the value from 0xFF01 (Serial Data Register)
         let data = self.io[0x01]; // Offset 0x01 in the I/O range corresponds to 0xFF01
         print!("{}", data as char); // Output as an ASCII character
+    }
+
+    pub fn update_div(&mut self, new: u8) {
+        if let Some(slot) = self.io.get_mut((0x4) as usize) {
+            *slot = new;
+        }
     }
 }

@@ -33,15 +33,12 @@ fn main() {
     //let rom = std::fs::read("roms/drmario.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim11.gb").unwrap();
+
+    let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim00.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
+
     //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
-
-    //games start at address 0x0100
-    emulator.cpu.registers.set_pc(0x0100);
-
-    //intialize input
-    // emulator.ram.borrow_mut().write(0xFF00, 0b11111111);
 
     //intialize window
     let (sdl, mut canvas) = match lcd::new() {
@@ -60,24 +57,29 @@ fn main() {
 
     //enable_test_pattern(&mut emulator.ram.borrow_mut());
 
-    'gameloop: loop {
-        // Input Handling
+    emulator.cpu.log_cpu_state();
 
+    'gameloop: loop {
+        // 1. Input Handling
         for evt in event_pump.poll_iter() {
+            // Read current joypad state from 0xFF00.
             let current = emulator.ram.borrow().read(0xFF00);
             match evt {
                 Event::Quit { .. } => break 'gameloop,
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {
+                    // If the CPU was stopped (waiting for input), resume it.
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
-                        println!("Key {:?} pressed. Resuming CPU...", key);
+                        // Uncomment the next line for debugging:
+                        // println!("Key {:?} pressed. Resuming CPU...", key);
                     }
-
+                    // Update joypad state for key press.
                     let updated = get_input(key, true, current);
                     emulator.ram.borrow_mut().write(0xFF00, updated);
 
+                    // Set the joypad interrupt flag (bit 4 of IF at 0xFF0F) to trigger an interrupt
                     let mut if_reg = emulator.ram.borrow().read(0xFF0F);
                     if_reg |= 1 << 4;
                     emulator.ram.borrow_mut().write(0xFF0F, if_reg);
@@ -85,6 +87,7 @@ fn main() {
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
+                    // Update joypad state for key release.
                     let updated = get_input(key, false, current);
                     emulator.ram.borrow_mut().write(0xFF00, updated);
                 }
@@ -92,30 +95,33 @@ fn main() {
             }
         }
 
+        // 2. Handle CPU Stopped or Halted State
         if emulator.cpu.stopped || emulator.cpu.halted {
             emulator.cpu.handle_interrupt();
+            // If still stopped, simulate idle cycles before processing the next frame.
             if emulator.cpu.stopped {
-                // No pending interrupts; simulate idle cycles
                 emulator.cpu.cycles += 4;
-                continue;
+                continue 'gameloop;
             }
         }
 
-        // CPU Execution
+        // 3. CPU Instruction Execution
+        // Execute a fixed number of instructions per frame.
         let instructions_per_frame = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
             let opcode = emulator.cpu.fetch();
-            emulator.cpu.execute(opcode);
+            let cycles = emulator.cpu.execute(opcode);
+            emulator.cpu.timer(cycles);
+
+            //emulator.cpu.log_cpu_state();
+
+            // After logging, check for pending interrupts.
             if emulator.cpu.ime && (emulator.ram.borrow().read(0xFF0F) != 0) {
-                println!(
-                    "Interrupt Triggered! Flags: {:02X}",
-                    emulator.ram.borrow().read(0xFF0F)
-                );
                 emulator.cpu.handle_interrupt();
             }
         }
 
-        // Render current video memory
+        // 4. Render the Video Output
         emulator.gpu.render();
         let fb = emulator.gpu.get_framebuffer();
         texture.update(None, fb, 160 * 3).unwrap();
@@ -124,7 +130,7 @@ fn main() {
         canvas.present();
     }
 
-    println!("Game loop exited.");
+    //println!("Game loop exited.");
 }
 
 pub fn enable_test_pattern(ram: &mut RAM) {
