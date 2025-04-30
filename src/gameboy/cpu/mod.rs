@@ -106,10 +106,10 @@ impl CPU {
         }
     
         let timer_speed = match tac & 0x03 {
-            0 => 1024, // 4096 Hz
+            0 => 2048, // 4096 Hz
             1 => 16,   // 262144 Hz
-            2 => 64,   // 65536 Hz
-            3 => 256,  // 16384 Hz
+            2 => 105,   // 65536 Hz
+            3 => 512,  // 16384 Hz
             _ => unreachable!("not valid"),
         };
     
