@@ -3,6 +3,7 @@ mod registers;
 use crate::gameboy::RAM;
 use registers::FLAGS;
 use registers::REGISTERS;
+use sdl2::libc::time_t;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,12 +22,16 @@ pub struct CPU {
     pub halted: bool,
     pub stopped: bool,
 
-    div_counter: u64,
-    timer_counter: u64,
-    timer_overflow_delay: u64,
+    div_counter: u8,
+    tima_counter: u16,
+
+    
+
+
 }
 impl CPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
+
         CPU {
             registers: REGISTERS::new(),
             ime: true,
@@ -35,8 +40,7 @@ impl CPU {
             halted: false,
             stopped: false,
             div_counter: 0,
-            timer_counter: 0,
-            timer_overflow_delay: 0,
+            tima_counter: 0,
         }
     }
     pub fn log_cpu_state(&self) {
@@ -90,64 +94,61 @@ impl CPU {
         value
     }
 
-    pub fn timer(&mut self, cycles: u64) {
-        self.div_counter += cycles;
-        if self.div_counter >= 256 {
-            let div_increment = (self.div_counter / 256) as u8;
-            self.div_counter %= 256;
-            let current_div = self.ram.borrow().read(0xFF04);
-            let new_div = current_div.wrapping_add(div_increment);
-            self.ram.borrow_mut().update_div(new_div);
+    
+    pub fn timer(&mut self, cycles: u8) {
+        let ff04 = self.ram.borrow().read(0xFF04);
+        let (div_result, div_overflow) = self.div_counter.overflowing_add(cycles);
+    
+        self.div_counter = div_result;
+        if div_overflow {
+            self.ram.borrow_mut().update_div(ff04.wrapping_add(1));
         }
     
-        let tac = self.ram.borrow().read(0xFF07);
-        if tac & 0x04 == 0 {
-            return;
-        }
+        let ff07 = self.ram.borrow().read(0xFF07);
+        if ff07 & 0b0000_0100 != 0 { // Enable timer if bit 2 is set
+            let frequency: u16 = match ff07 & 0b0000_0011 {
+                0 => 1024,
+                1 => 16,
+                2 => 64,
+                3 => 256,
+                _ => unreachable!(),
+            };
+
+            self.tima_counter += cycles as u16;    
+            let ff05 = self.ram.borrow().read(0xFF05);
+            let tima_result;
+            let mut tima_overflow = false;
     
-        let timer_speed = match tac & 0x03 {
-            0 => 2048, // 4096 Hz
-            1 => 16,   // 262144 Hz
-            2 => 105,   // 65536 Hz
-            3 => 512,  // 16384 Hz
-            _ => unreachable!("not valid"),
-        };
+            // Handle TIMA overflow based on TMA behavior
+            if self.tima_counter >= frequency {
+                self.tima_counter -= frequency;
+                (tima_result, tima_overflow) = ff05.overflowing_add(1);
+                self.ram.borrow_mut().write(0xFF05, tima_result);
+                }
     
-        if self.timer_overflow_delay > 0 {
-            if self.timer_overflow_delay > cycles {
-                self.timer_overflow_delay -= cycles;
-                return;
-            } else {
-                let leftover_cycles = cycles - self.timer_overflow_delay;
-                self.timer_overflow_delay = 0;
-                let tma = self.ram.borrow().read(0xFF06);
-                self.ram.borrow_mut().write(0xFF05, tma);
-                self.timer_counter = leftover_cycles;
-            }
-        } else {
-            self.timer_counter += cycles;
-        }
+            // Interrupt logic and TMA synchronization
+            if tima_overflow {
+                let reset_value = self.ram.borrow().read(0xFF06); // TMA
+                self.ram.borrow_mut().write(0xFF05, reset_value);
     
-        while self.timer_counter >= timer_speed {
-            self.timer_counter -= timer_speed;
-            let tima = self.ram.borrow().read(0xFF05);
-            if tima == 0xFF {
-                self.ram.borrow_mut().write(0xFF05, 0);
-                let mut if_reg = self.ram.borrow().read(0xFF0F);
-                if_reg |= 0x04; // Set Timer interrupt flag
-                self.ram.borrow_mut().write(0xFF0F, if_reg);
-                self.timer_overflow_delay = 4;
-                break;
-            } else {
-                self.ram.borrow_mut().write(0xFF05, tima.wrapping_add(1));
+                let interrupt_flag = self.ram.borrow().read(0xFF0F) | 0b0001_0000;
+                self.ram.borrow_mut().write(0xFF0F, interrupt_flag);
+    
             }
         }
     }
+    
+    
     
     pub fn handle_interrupt(&mut self) {
         let ie = self.ram.borrow().read(0xFFFF);
         let if_val = self.ram.borrow().read(0xFF0F);
         let pending = ie & if_val;
+
+        if ie & 0b0000_0100 == 0
+        {
+            self.halted = false;
+        }
 
         if pending == 0 {
             return;
@@ -155,8 +156,13 @@ impl CPU {
 
         self.halted = false;
 
-        if !self.ime {
+        if !self.ime && pending != 0{
             self.halt_bug();
+            return;
+        }
+
+        if !self.ime
+        {
             return;
         }
 
@@ -168,6 +174,7 @@ impl CPU {
             (4, 0x0060), // Joypad
         ] {
             if (pending & (1 << bit)) != 0 {
+                self.ime = false;
                 self.service_interrupt(bit, address);
                 break;
             }
@@ -175,21 +182,19 @@ impl CPU {
     }
 
     fn service_interrupt(&mut self, bit: u8, address: u16) {
-        // println!(
-        //     "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
-        //     self.ime,
-        //     self.ram.borrow().read(0xFF0F),
-        //     self.ram.borrow().read(0xFFFF),
-        //     self.halted
-        // );
+        println!(
+            "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
+            self.ime,
+            self.ram.borrow().read(0xFF0F),
+            self.ram.borrow().read(0xFFFF),
+            self.halted
+        );
         self.halted = false;
 
         let mut if_val = self.ram.borrow().read(0xFF0F);
         let mask = (1 as u8) << bit;
         if_val &= !(mask);
         self.ram.borrow_mut().write(0xFF0F, if_val);
-
-        self.ime = false;
 
         let pc = self.registers.get_pc();
         self.registers
@@ -1954,7 +1959,8 @@ impl CPU {
             }
         }
 
-         self.cycles.saturating_sub(initial_cycles)
+         let final_cycles = self.cycles.saturating_sub(initial_cycles);
+         return final_cycles;
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {

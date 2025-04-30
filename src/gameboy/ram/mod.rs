@@ -1,5 +1,5 @@
 pub struct RAM {
-    rom: Box<[u8; 0x8000]>,
+    rom:  Vec<u8>, //Box<[u8; 0x8000]>,
     pub vram: [u8; 0x2000],
     pub wram: [u8; 0x2000],
     pub eram: [u8; 0x8000], // External Cartridge RAM
@@ -11,11 +11,11 @@ pub struct RAM {
 }
 
 impl RAM {
-    pub fn new(rom_data: Vec<u8>) -> Self {
-        let mut rom = [0; 0x8000]; // Initialize with zeroed data
-        rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
+    pub fn new(rom: Vec<u8>) -> Self {
+        //let mut rom = [0; 0x8000]; // Initialize with zeroed data
+        //rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
         Self {
-            rom: Box::new(rom),
+            rom,//: Box::new(rom),
             vram: [0; 0x2000],
             wram: [0; 0x2000],
             eram: [0; 0x8000],
@@ -38,7 +38,6 @@ impl RAM {
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
             0xE000..=0xFDFF => self.wram[(address - 0xE000) as usize],
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
-            0xFF44 => 0x90,
             0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,

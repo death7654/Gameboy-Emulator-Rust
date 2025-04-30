@@ -30,14 +30,13 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/drmario.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
+    let rom = std::fs::read("roms/drmario.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/window_y_trigger_wx_offscreen.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
 
-    let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim00.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim01.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
 
     //intialize window
@@ -111,14 +110,12 @@ fn main() {
         for _ in 0..instructions_per_frame {
             let opcode = emulator.cpu.fetch();
             let cycles = emulator.cpu.execute(opcode);
-            emulator.cpu.timer(cycles);
+            emulator.cpu.timer(cycles as u8);
 
-            //emulator.cpu.log_cpu_state();
+           // emulator.cpu.log_cpu_state();
 
             // After logging, check for pending interrupts.
-            if emulator.cpu.ime && (emulator.ram.borrow().read(0xFF0F) != 0) {
-                emulator.cpu.handle_interrupt();
-            }
+            emulator.cpu.handle_interrupt();
         }
 
         // 4. Render the Video Output
