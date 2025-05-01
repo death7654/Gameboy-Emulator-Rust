@@ -7,29 +7,29 @@ use super::ram::RAM;
 const DMG_BG_PALETTE: [[u8; 3]; 4] = [
     [255, 255, 255], // White
     [170, 170, 170], // Light gray
-    [85,  85,  85 ], // Dark gray
-    [0,   0,   0  ], // Black
+    [85, 85, 85],    // Dark gray
+    [0, 0, 0],       // Black
 ];
 
 // For sprites, color zero is transparent.
 const DMG_SPRITE_PALETTE: [[u8; 3]; 4] = [
-    [0,   0,   0  ], // Transparent (ignored)
+    [0, 0, 0],       // Transparent (ignored)
     [255, 255, 255], // White
     [170, 170, 170], // Light gray
-    [85,  85,  85 ], // Dark gray
+    [85, 85, 85],    // Dark gray
 ];
 
 // VRAM layout constants (slice index 0 == address 0x8000)
-const VRAM_START:        usize = 0x8000;
-const BG_MAP_UNSIGNED:   usize = 0x9800; // if LCDC bit 3 = 0
-const BG_MAP_SIGNED:     usize = 0x9C00; // if LCDC bit 3 = 1
+const VRAM_START: usize = 0x8000;
+const BG_MAP_UNSIGNED: usize = 0x9800; // if LCDC bit 3 = 0
+const BG_MAP_SIGNED: usize = 0x9C00; // if LCDC bit 3 = 1
 const TILE_DATA_UNSIGNED: usize = 0x8000; // if LCDC bit 4 = 1
-const TILE_DATA_SIGNED:   usize = 0x8800; // if LCDC bit 4 = 0
+const TILE_DATA_SIGNED: usize = 0x8800; // if LCDC bit 4 = 0
 
 pub struct GPU {
     /// 160×144 RGB framebuffer
     pub framebuffer: [u8; 160 * 144 * 3],
-    pub ram:         Rc<RefCell<RAM>>,
+    pub ram: Rc<RefCell<RAM>>,
 }
 
 impl GPU {
@@ -91,14 +91,16 @@ impl GPU {
                 let px = bx % 8;
                 let py = by % 8;
                 let row_off = py * 2;
-                if tile_off + row_off + 1 >= vram.len() { continue; }
+                if tile_off + row_off + 1 >= vram.len() {
+                    continue;
+                }
 
-                let lo = (vram[tile_off + row_off]   >> (7 - px)) & 1;
-                let hi = (vram[tile_off + row_off+1] >> (7 - px)) & 1;
+                let lo = (vram[tile_off + row_off] >> (7 - px)) & 1;
+                let hi = (vram[tile_off + row_off + 1] >> (7 - px)) & 1;
                 let color = DMG_BG_PALETTE[((hi << 1) | lo) as usize];
 
                 let fb = (y * 160 + x) * 3;
-                self.framebuffer[fb    ] = color[0];
+                self.framebuffer[fb] = color[0];
                 self.framebuffer[fb + 1] = color[1];
                 self.framebuffer[fb + 2] = color[2];
             }
@@ -116,13 +118,13 @@ impl GPU {
             let sprite_h = if lcdc & 0x04 != 0 { 16 } else { 8 };
 
             for i in 0..40 {
-                let base     = i * 4;
-                let sy       = oam[base]   as i16 - 16;
-                let sx       = oam[base+1] as i16 - 8;
-                let tile_no  = oam[base+2];
-                let attrs    = oam[base+3];
-                let x_flip   = attrs & 0x20 != 0;
-                let y_flip   = attrs & 0x40 != 0;
+                let base = i * 4;
+                let sy = oam[base] as i16 - 16;
+                let sx = oam[base + 1] as i16 - 8;
+                let tile_no = oam[base + 2];
+                let attrs = oam[base + 3];
+                let x_flip = attrs & 0x20 != 0;
+                let y_flip = attrs & 0x40 != 0;
 
                 let vram = &ram.vram; // unsigned tile data
                 let tile_off = (tile_no as usize) * 16;
@@ -130,7 +132,9 @@ impl GPU {
                 for row in 0..sprite_h {
                     let ty = if y_flip { sprite_h - 1 - row } else { row };
                     let off = tile_off + ty as usize * 2;
-                    if off + 1 >= vram.len() { continue; }
+                    if off + 1 >= vram.len() {
+                        continue;
+                    }
 
                     let lo = vram[off];
                     let hi = vram[off + 1];
@@ -138,7 +142,9 @@ impl GPU {
                         let tx = if x_flip { 7 - col } else { col };
                         let bit = 7 - tx;
                         let c = (((hi >> bit) & 1) << 1) | ((lo >> bit) & 1);
-                        if c == 0 { continue; } // transparent
+                        if c == 0 {
+                            continue;
+                        } // transparent
 
                         let px = sx + col as i16;
                         let py = sy + row as i16;
@@ -148,7 +154,7 @@ impl GPU {
 
                         let color = DMG_SPRITE_PALETTE[c as usize];
                         let fb = (py as usize * 160 + px as usize) * 3;
-                        self.framebuffer[fb    ] = color[0];
+                        self.framebuffer[fb] = color[0];
                         self.framebuffer[fb + 1] = color[1];
                         self.framebuffer[fb + 2] = color[2];
                     }
@@ -164,10 +170,14 @@ impl GPU {
         let (use_unsigned, tile_data_base, map_off, pos_x, pos_y, vram) = {
             let ram = self.ram.borrow();
             let lcdc = ram.read(0xFF40);
-            if lcdc & 0x20 == 0 { return }     // window disabled
+            if lcdc & 0x20 == 0 {
+                return;
+            } // window disabled
             let raw_wy = ram.read(0xFF4A) as isize;
             let raw_wx = ram.read(0xFF4B) as isize;
-            if raw_wy >= 144 { return }        // fully off-screen below
+            if raw_wy >= 144 {
+                return;
+            } // fully off-screen below
 
             // on-screen origin
             let pos_y = raw_wy;
@@ -191,8 +201,8 @@ impl GPU {
             (use_unsigned, tile_data_base, map_off, pos_x, pos_y, vram)
         };
 
-        let y0 = pos_y.max(0)    as usize;
-        let x0 = pos_x.max(0)    as usize;
+        let y0 = pos_y.max(0) as usize;
+        let x0 = pos_x.max(0) as usize;
         let y1 = 144;
         let x1 = 160;
 
@@ -204,7 +214,9 @@ impl GPU {
                 let col = ix / 8;
                 let row = iy / 8;
                 let idx = row * 32 + col;
-                if map_off + idx >= vram.len() { continue; }
+                if map_off + idx >= vram.len() {
+                    continue;
+                }
 
                 let tn = vram[map_off + idx];
                 let ti = if use_unsigned {
@@ -217,14 +229,16 @@ impl GPU {
                 let py = iy % 8;
                 let px = ix % 8;
                 let ro = py * 2;
-                if to + ro + 1 >= vram.len() { continue; }
+                if to + ro + 1 >= vram.len() {
+                    continue;
+                }
 
-                let lo = (vram[to + ro]   >> (7 - px)) & 1;
-                let hi = (vram[to + ro+1] >> (7 - px)) & 1;
+                let lo = (vram[to + ro] >> (7 - px)) & 1;
+                let hi = (vram[to + ro + 1] >> (7 - px)) & 1;
                 let color = DMG_BG_PALETTE[((hi << 1) | lo) as usize];
 
                 let fb = (wy * 160 + wx) * 3;
-                self.framebuffer[fb    ] = color[0];
+                self.framebuffer[fb] = color[0];
                 self.framebuffer[fb + 1] = color[1];
                 self.framebuffer[fb + 2] = color[2];
             }

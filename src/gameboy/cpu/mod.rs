@@ -3,7 +3,7 @@ mod registers;
 use crate::gameboy::RAM;
 use registers::FLAGS;
 use registers::REGISTERS;
-use sdl2::libc::time_t;
+use sdl2::sys::uint_least16_t;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,17 +21,9 @@ pub struct CPU {
     pub ram: Rc<RefCell<RAM>>,
     pub halted: bool,
     pub stopped: bool,
-
-    div_counter: u8,
-    tima_counter: u16,
-
-    
-
-
 }
 impl CPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
-
         CPU {
             registers: REGISTERS::new(),
             ime: true,
@@ -39,8 +31,6 @@ impl CPU {
             ram,
             halted: false,
             stopped: false,
-            div_counter: 0,
-            tima_counter: 0,
         }
     }
     pub fn log_cpu_state(&self) {
@@ -96,46 +86,51 @@ impl CPU {
 
     pub fn handle_interrupt(&mut self){
         let ie = self.ram.borrow().read(0xFFFF);
-        let if_val = self.ram.borrow().read(0xFF0F);
-        let pending = ie & if_val;
+        let iflag = self.ram.borrow().read(0xFF0F);
+        let pending = ie & iflag;
+        println!(
+            "pre service: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
+            self.ime,
+            self.ram.borrow().read(0xFF0F),
+            self.ram.borrow().read(0xFFFF),
+            self.halted
+        );
 
-        if ie & 0b0000_0100 == 0
-        {
-            self.halted = false;
+    
+        if self.halted {
+            self.cycles +=4;
         }
 
         if pending == 0 {
             return;
         }
+        else {
+            self.halted = false;
+        }
 
-        self.halted = false;
-
-        if !self.ime && pending != 0{
+        // 3) HALT-bug: IME=0 + pending → exit HALT but do *not* service
+        if !self.ime && pending != 0 && self.halted {
             self.halt_bug();
             return;
         }
-
-        if !self.ime
-        {
-            return;
-        }
-
-        for (bit, address) in [
-            (0, 0x0040), // V-Blank
-            (1, 0x0048), // LCD STAT
-            (2, 0x0050), // Timer
-            (3, 0x0058), // Serial
-            (4, 0x0060), // Joypad
-        ] {
-            if (pending & (1 << bit)) != 0 {
-                self.ime = false;
-                self.service_interrupt(bit, address);
-                break;
+        if pending != 0 && self.ime {
+            // 4) Service highest-priority pending interrupt
+            for &(bit, vector) in &[
+                (0, 0x0040), // V-Blank
+                (1, 0x0048), // LCD STAT
+                (2, 0x0050), // Timer
+                (3, 0x0058), // Serial
+                (4, 0x0060), // Joypad
+            ] {
+                if (pending & (1 << bit)) != 0 {
+                    // push PC, clear IF, jump to handler, disable IME
+                    self.service_interrupt(bit, vector);
+                }
             }
         }
     }
 
-    fn service_interrupt(&mut self, bit: u8, address: u16) {
+    fn service_interrupt(&mut self, bit: u8, vector: u16) {
         println!(
             "Interrupt serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
             self.ime,
@@ -144,27 +139,15 @@ impl CPU {
             self.halted
         );
         self.halted = false;
+        self.ime = false;
 
-        let mut if_val = self.ram.borrow().read(0xFF0F);
-        let mask = (1 as u8) << bit;
-        if_val &= !(mask);
-        self.ram.borrow_mut().write(0xFF0F, if_val);
+        self.push_pc();
 
-        let pc = self.registers.get_pc();
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.ram
-            .borrow_mut()
-            .write(self.registers.get_sp(), (pc >> 8) as u8);
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.ram
-            .borrow_mut()
-            .write(self.registers.get_sp(), (pc & 0xFF) as u8);
+        let mut iflag = self.ram.borrow().read(0xFF0F);
+        iflag &= !(1 << bit);
+        self.ram.borrow_mut().write(0xFF0F, iflag);
 
-        self.registers.set_pc(address);
-
-        self.cycles += 20;
+        self.registers.set_pc(vector);
 
         println!(
             "after serviced: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
@@ -173,12 +156,28 @@ impl CPU {
             self.ram.borrow().read(0xFFFF),
             self.halted
         );
+
     }
 
-    pub fn halt_bug(&mut self) {
-        let opcode = self.fetch();
-        self.execute(opcode);
+    fn halt_bug(&mut self) {
         self.halted = false;
+        let pc = self.registers.get_pc();
+        let opcode = self.ram.borrow().read(pc);
+        self.execute(opcode);
+    }
+
+    fn push_pc(&mut self) {
+        let value = self.registers.get_pc();
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram
+            .borrow_mut()
+            .write(self.registers.get_sp(), ((value & 0xFF00) >> 8) as u8);
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.ram
+            .borrow_mut()
+            .write(self.registers.get_sp(), (value & 0xFF) as u8);
     }
 
     pub fn execute(&mut self, opcode: u8) -> u64 {
@@ -391,9 +390,9 @@ impl CPU {
             0x18 => {
                 //relative jump
                 let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
-            let new_pc = (self.registers.get_pc() as i16).wrapping_add(jump as i16) as u16;
-            self.registers.set_pc(new_pc);
-            self.cycles += 12;
+                let new_pc = (self.registers.get_pc() as i16).wrapping_add(jump as i16) as u16;
+                self.registers.set_pc(new_pc);
+                self.cycles += 12;
             }
             0x19 => {
                 let hl = self.registers.get_hl();
@@ -1866,18 +1865,18 @@ impl CPU {
             }
             0xF8 => {
                 let sp = self.registers.get_sp();
-            let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
-            let result = (sp as i16).wrapping_add(imm as i16) as u16;
-            self.registers.set_hl(result);
-            let mut f = 0;
-            if ((sp & 0x0F) as i16 + ((imm as i16) & 0x0F)) > 0x0F {
-                f |= FLAGS::H as u8;
-            }
-            if ((sp & 0xFF) as i16 + ((imm as i16) & 0xFF)) > 0xFF {
-                f |= FLAGS::C as u8;
-            }
-            self.registers.set_f(f);
-            self.cycles += 16;
+                let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let result = (sp as i16).wrapping_add(imm as i16) as u16;
+                self.registers.set_hl(result);
+                let mut f = 0;
+                if ((sp & 0x0F) as i16 + ((imm as i16) & 0x0F)) > 0x0F {
+                    f |= FLAGS::H as u8;
+                }
+                if ((sp & 0xFF) as i16 + ((imm as i16) & 0xFF)) > 0xFF {
+                    f |= FLAGS::C as u8;
+                }
+                self.registers.set_f(f);
+                self.cycles += 16;
             }
             0xF9 => {
                 self.registers.set_sp(self.registers.get_hl());
@@ -1913,8 +1912,8 @@ impl CPU {
             }
         }
 
-         let final_cycles = self.cycles.saturating_sub(initial_cycles);
-         return final_cycles;
+        let final_cycles = self.cycles.saturating_sub(initial_cycles);
+        return final_cycles;
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {
@@ -2897,7 +2896,7 @@ impl CPU {
             f &= !(FLAGS::H as u8);
         }
 
-        self.registers.set_f(f);
+        self.registers.set_f(f & 0xF0);
 
         self.cycles += 4;
         result

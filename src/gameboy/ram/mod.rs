@@ -1,5 +1,5 @@
 pub struct RAM {
-    rom:  Vec<u8>, //Box<[u8; 0x8000]>,
+    rom: Vec<u8>, //Box<[u8; 0x8000]>,
     pub vram: [u8; 0x2000],
     pub wram: [u8; 0x2000],
     pub eram: [u8; 0x8000], // External Cartridge RAM
@@ -15,7 +15,7 @@ impl RAM {
         //let mut rom = [0; 0x8000]; // Initialize with zeroed data
         //rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
         Self {
-            rom,//: Box::new(rom),
+            rom, //: Box::new(rom),
             vram: [0; 0x2000],
             wram: [0; 0x2000],
             eram: [0; 0x8000],

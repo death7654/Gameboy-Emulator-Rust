@@ -30,11 +30,11 @@ Tests Passed
  */
 
 fn main() {
-    let rom = std::fs::read("roms/drmario.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/window_y_trigger_wx_offscreen.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg-test/02-interrupts.gb").unwrap();
+    //let rom = std::fs::read("roms/tetris.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/blargg-test/2.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim01.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim00.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
@@ -72,7 +72,7 @@ fn main() {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
                         // Uncomment the next line for debugging:
-                        // println!("Key {:?} pressed. Resuming CPU...", key);
+                        println!("Key {:?} pressed. Resuming CPU...", key);
                     }
                     // Update joypad state for key press.
                     let updated = get_input(key, true, current);
@@ -100,22 +100,27 @@ fn main() {
             // If still stopped, simulate idle cycles before processing the next frame.
             if emulator.cpu.stopped {
                 emulator.cpu.cycles += 4;
+                emulator.timer.timer(4);
                 continue 'gameloop;
             }
         }
 
         // 3. CPU Instruction Execution
         // Execute a fixed number of instructions per frame.
-        let instructions_per_frame = CPU_CLOCK / 60;
+        let instructions_per_frame: u32 = CPU_CLOCK / 120;
         for _ in 0..instructions_per_frame {
-            let opcode = emulator.cpu.fetch();
-            let cycles = emulator.cpu.execute(opcode);
-            emulator.cpu.timer(cycles as u8);
-
-           // emulator.cpu.log_cpu_state();
-
-            // After logging, check for pending interrupts.
+            let pre_exec_cycles = emulator.cpu.cycles;
             emulator.cpu.handle_interrupt();
+
+            let opcode = emulator.cpu.fetch();
+            emulator.cpu.execute(opcode);
+
+            //emulator.cpu.log_cpu_state();
+            let after_exec_cycles = emulator.cpu.cycles;
+
+            emulator
+                .timer
+                .timer((after_exec_cycles - pre_exec_cycles) as u16);
         }
 
         // 4. Render the Video Output
