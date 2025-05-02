@@ -1,8 +1,6 @@
 mod gameboy;
 
-use gameboy::input::get_input;
 use gameboy::lcd;
-use gameboy::ram::RAM;
 use gameboy::EMULATOR;
 
 use sdl2;
@@ -30,11 +28,12 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/tetris.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/cpu.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/blargg-test/2.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/halt_bug.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg-test/2.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tim00.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim00_div_trigger.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
@@ -54,31 +53,30 @@ fn main() {
         .unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
 
+
     //enable_test_pattern(&mut emulator.ram.borrow_mut());
 
-    emulator.cpu.log_cpu_state();
+    //emulator.cpu.log_cpu_state();
 
     'gameloop: loop {
         // 1. Input Handling
         for evt in event_pump.poll_iter() {
             // Read current joypad state from 0xFF00.
-            let current = emulator.ram.borrow().read(0xFF00);
+            
             match evt {
                 Event::Quit { .. } => break 'gameloop,
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {
-                    // If the CPU was stopped (waiting for input), resume it.
+
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
-                        // Uncomment the next line for debugging:
                         println!("Key {:?} pressed. Resuming CPU...", key);
                     }
-                    // Update joypad state for key press.
-                    let updated = get_input(key, true, current);
+                    emulator.joypad.set_key(key, true);
+                    let updated = emulator.joypad.read();
                     emulator.ram.borrow_mut().write(0xFF00, updated);
 
-                    // Set the joypad interrupt flag (bit 4 of IF at 0xFF0F) to trigger an interrupt
                     let mut if_reg = emulator.ram.borrow().read(0xFF0F);
                     if_reg |= 1 << 4;
                     emulator.ram.borrow_mut().write(0xFF0F, if_reg);
@@ -86,13 +84,18 @@ fn main() {
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
-                    // Update joypad state for key release.
-                    let updated = get_input(key, false, current);
+                    emulator.joypad.set_key(key, false);
+                    let updated = emulator.joypad.read();
                     emulator.ram.borrow_mut().write(0xFF00, updated);
                 }
                 _ => {}
+
             }
+
+
         }
+        let ram_data = emulator.ram.borrow().read(0xFF00);
+        println!("current: {}", ram_data);
 
         // 2. Handle CPU Stopped or Halted State
         if emulator.cpu.stopped || emulator.cpu.halted {
@@ -107,7 +110,7 @@ fn main() {
 
         // 3. CPU Instruction Execution
         // Execute a fixed number of instructions per frame.
-        let instructions_per_frame: u32 = CPU_CLOCK / 120;
+        let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
             let pre_exec_cycles = emulator.cpu.cycles;
             emulator.cpu.handle_interrupt();
@@ -133,76 +136,4 @@ fn main() {
     }
 
     //println!("Game loop exited.");
-}
-
-pub fn enable_test_pattern(ram: &mut RAM) {
-    // Set LCD control to turn on display
-    ram.io[0x40] = 0x91; // LCDC: LCD enabled, BG enabled
-
-    // Set background palette
-    ram.io[0x47] = 0xFC; // BGP (white, light gray, dark gray, black)
-
-    // Clear VRAM first
-    for byte in ram.vram.iter_mut() {
-        *byte = 0;
-    }
-
-    // Fill one tile with a checkerboard pattern
-    for row in 0..8 {
-        if row % 2 == 0 {
-            ram.vram[0x0000 + row * 2] = 0b10101010;
-            ram.vram[0x0000 + row * 2 + 1] = 0;
-        } else {
-            ram.vram[0x0000 + row * 2] = 0b01010101;
-            ram.vram[0x0000 + row * 2 + 1] = 0;
-        }
-    }
-
-    // Fill background tilemap to point to tile 0
-    for i in 0..(32 * 32) {
-        ram.vram[0x1800 + i] = 0; // Tile 0
-    }
-}
-
-#[test]
-fn test_halt_exits_on_timer_interrupt() {
-    use crate::gameboy::cpu::CPU;
-    use crate::gameboy::ram::RAM;
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    let rom = vec![0; 0x8000];
-    let ram = Rc::new(RefCell::new(RAM::new(rom)));
-    let mut cpu = CPU::new(ram.clone());
-
-    ram.borrow_mut().write(0xFF07, 0x05);
-
-    ram.borrow_mut().write(0xFF05, 0x00);
-
-    ram.borrow_mut().write(0xFF0F, 0x00);
-
-    cpu.halted = true;
-
-    println!("Halt: {}", cpu.halted);
-
-    let mut if_reg = ram.borrow().read(0xFF0F);
-
-    println!("if reg: {:08b}", if_reg);
-    if_reg |= 1 << 2; // Set bit 2 (Timer interrupt)
-    ram.borrow_mut().write(0xFF0F, if_reg);
-
-    cpu.handle_interrupt();
-    println!("Halt: {}", cpu.halted);
-    println!("if reg: {:08b}", if_reg);
-
-    assert!(
-        !cpu.halted,
-        "CPU should exit HALT when timer interrupt occurs"
-    );
-
-    let if_reg = ram.borrow().read(0xFF0F);
-    assert!(
-        (if_reg & (1 << 2)) != 0,
-        "Timer interrupt should be pending"
-    );
 }

@@ -3,7 +3,6 @@ mod registers;
 use crate::gameboy::RAM;
 use registers::FLAGS;
 use registers::REGISTERS;
-use sdl2::sys::uint_least16_t;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -88,13 +87,13 @@ impl CPU {
         let ie = self.ram.borrow().read(0xFFFF);
         let iflag = self.ram.borrow().read(0xFF0F);
         let pending = ie & iflag;
-        println!(
-            "pre service: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
-            self.ime,
-            self.ram.borrow().read(0xFF0F),
-            self.ram.borrow().read(0xFFFF),
-            self.halted
-        );
+        // println!(
+        //     "pre service: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
+        //     self.ime,
+        //     self.ram.borrow().read(0xFF0F),
+        //     self.ram.borrow().read(0xFFFF),
+        //     self.halted
+        // );
 
     
         if self.halted {
@@ -3102,7 +3101,7 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
+        self.cycles += 4;
     }
 
     fn reset(&mut self, address: u16) {
