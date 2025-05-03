@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::lcd;
 use super::ram::RAM;
 
 // DMG palettes for background and sprites.
@@ -21,10 +22,12 @@ const DMG_SPRITE_PALETTE: [[u8; 3]; 4] = [
 
 // VRAM layout constants (slice index 0 == address 0x8000)
 const VRAM_START: usize = 0x8000;
-const BG_MAP_UNSIGNED: usize = 0x9800; // if LCDC bit 3 = 0
-const BG_MAP_SIGNED: usize = 0x9C00; // if LCDC bit 3 = 1
-const TILE_DATA_UNSIGNED: usize = 0x8000; // if LCDC bit 4 = 1
-const TILE_DATA_SIGNED: usize = 0x8800; // if LCDC bit 4 = 0
+
+const BG_MAP_UNSIGNED: usize = 0x9800; 
+const BG_MAP_SIGNED: usize = 0x9C00; 
+
+const TILE_DATA_UNSIGNED: usize = 0x8000; 
+const TILE_DATA_SIGNED: usize = 0x8800;
 
 pub struct GPU {
     /// 160×144 RGB framebuffer
@@ -45,8 +48,12 @@ impl GPU {
         let ram = self.ram.borrow();
         let lcdc = ram.read(0xFF40);
 
+        let lcd_on = lcdc & 0x80 != 0;
+        let tile_map_area = lcdc & 0x40 == 0;
+        let _window_enabled = lcdc & 0x20 != 0;
+
         // LCD off: white screen
-        if lcdc & 0x80 == 0 {
+        if !lcd_on { 
             self.framebuffer.fill(255);
             return;
         }
@@ -55,22 +62,23 @@ impl GPU {
         let scy = ram.read(0xFF42) as usize;
         let scx = ram.read(0xFF43) as usize;
 
-        // Tile‐map select
-        let bg_map_base = if lcdc & 0x08 != 0 {
-            BG_MAP_SIGNED
-        } else {
+        // Tile‐map select for the background
+        let bg_map_base = if tile_map_area {
             BG_MAP_UNSIGNED
+        } else {
+            BG_MAP_SIGNED
         };
+
         let bg_map_offset = bg_map_base - VRAM_START;
 
-        // Tile‐data select + signed/unsigned mode
+        // Tile‐data select + signed/unsigned mode (same for window and BG)
         let (tile_data_base, use_unsigned) = if lcdc & 0x10 != 0 {
             (TILE_DATA_UNSIGNED, true)
         } else {
             (TILE_DATA_SIGNED, false)
         };
 
-        let vram = &ram.vram;
+        let vram = &ram.vram; // immutable reference to VRAM
         for y in 0..144 {
             for x in 0..160 {
                 // scrolled coordinates
@@ -86,7 +94,7 @@ impl GPU {
                 } else {
                     (tile_no as i8 as isize + 128) as usize
                 };
-                let tile_off = (tile_data_base - VRAM_START) + tile_idx * 16;
+                let tile_off = (TILE_DATA_UNSIGNED - VRAM_START) + tile_idx * 16;
 
                 let px = bx % 8;
                 let py = by % 8;
@@ -105,7 +113,7 @@ impl GPU {
                 self.framebuffer[fb + 2] = color[2];
             }
         }
-        drop(ram); // free the immutable borrow
+        drop(ram); // End of immutable borrow
 
         // —— Window Pass ——
         self.render_window();
@@ -126,25 +134,24 @@ impl GPU {
                 let x_flip = attrs & 0x20 != 0;
                 let y_flip = attrs & 0x40 != 0;
 
-                let vram = &ram.vram; // unsigned tile data
                 let tile_off = (tile_no as usize) * 16;
 
                 for row in 0..sprite_h {
                     let ty = if y_flip { sprite_h - 1 - row } else { row };
                     let off = tile_off + ty as usize * 2;
-                    if off + 1 >= vram.len() {
+                    if off + 1 >= ram.vram.len() {
                         continue;
                     }
 
-                    let lo = vram[off];
-                    let hi = vram[off + 1];
+                    let lo = ram.vram[off];
+                    let hi = ram.vram[off + 1];
                     for col in 0..8 {
                         let tx = if x_flip { 7 - col } else { col };
                         let bit = 7 - tx;
                         let c = (((hi >> bit) & 1) << 1) | ((lo >> bit) & 1);
                         if c == 0 {
-                            continue;
-                        } // transparent
+                            continue; // transparent
+                        }
 
                         let px = sx + col as i16;
                         let py = sy + row as i16;
@@ -163,44 +170,49 @@ impl GPU {
         }
     }
 
-    /// Correctly handles WX<7 as a negative X origin,
-    /// clips to [0..160)×[0..144), and never conflicts borrows.
+    // Updated render_window:
+    // Uses LCDC bit 3 (0x08) to select window tile map instead of BG tile map bits.
     fn render_window(&mut self) {
-        // pull everything out of RAM (including a VRAM clone) in one borrow
+        // Pull out all needed state from RAM in one go.
         let (use_unsigned, tile_data_base, map_off, pos_x, pos_y, vram) = {
             let ram = self.ram.borrow();
             let lcdc = ram.read(0xFF40);
+
+            // If the window is disabled via LCDC, return.
             if lcdc & 0x20 == 0 {
                 return;
-            } // window disabled
+            }
             let raw_wy = ram.read(0xFF4A) as isize;
             let raw_wx = ram.read(0xFF4B) as isize;
             if raw_wy >= 144 {
-                return;
-            } // fully off-screen below
+                return; // fully off-screen below
+            }
 
-            // on-screen origin
-            let pos_y = raw_wy;
-            let pos_x = raw_wx - 7;
-
-            let base = if lcdc & 0x40 != 0 {
-                BG_MAP_SIGNED
+            // For the window, the tile map selection comes from LCDC bit 3 (0x08):
+            let win_map_base = if lcdc & 0x08 != 0 {
+                0x9C00
             } else {
-                BG_MAP_UNSIGNED
+                0x9800
             };
-            let map_off = base - VRAM_START;
+            let map_off = win_map_base - VRAM_START;
 
+            // Use the same tile data select register as the background (LCDC bit 4).
             let (tile_data_base, use_unsigned) = if lcdc & 0x10 != 0 {
                 (TILE_DATA_UNSIGNED, true)
             } else {
                 (TILE_DATA_SIGNED, false)
             };
 
-            // clone VRAM so we drop the borrow here
+            // Window origin; note that WX is specified with an offset of 7.
+            let pos_y = raw_wy;
+            let pos_x = raw_wx - 7;
+
+            // Clone VRAM for safe use beyond the borrow.
             let vram = ram.vram.clone();
             (use_unsigned, tile_data_base, map_off, pos_x, pos_y, vram)
         };
 
+        // Determine window onscreen extents.
         let y0 = pos_y.max(0) as usize;
         let x0 = pos_x.max(0) as usize;
         let y1 = 144;
@@ -208,6 +220,7 @@ impl GPU {
 
         for wy in y0..y1 {
             for wx in x0..x1 {
+                // Determine the window internal pixel coordinates.
                 let iy = (wy as isize - pos_y) as usize;
                 let ix = (wx as isize - pos_x) as usize;
 
@@ -245,7 +258,7 @@ impl GPU {
         }
     }
 
-    /// Expose framebuffer for display
+    /// Expose framebuffer for display.
     pub fn get_framebuffer(&self) -> &[u8] {
         &self.framebuffer
     }

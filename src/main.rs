@@ -30,8 +30,8 @@ Tests Passed
 fn main() {
     //let rom = std::fs::read("roms/tetris.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/halt_bug.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg-test/2.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/blargg/cpu_instrs/individual/02-interrupts.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
     //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
@@ -53,7 +53,6 @@ fn main() {
         .unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
 
-
     //enable_test_pattern(&mut emulator.ram.borrow_mut());
 
     //emulator.cpu.log_cpu_state();
@@ -62,13 +61,12 @@ fn main() {
         // 1. Input Handling
         for evt in event_pump.poll_iter() {
             // Read current joypad state from 0xFF00.
-            
+
             match evt {
                 Event::Quit { .. } => break 'gameloop,
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {
-
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
                         println!("Key {:?} pressed. Resuming CPU...", key);
@@ -89,10 +87,7 @@ fn main() {
                     emulator.ram.borrow_mut().write(0xFF00, updated);
                 }
                 _ => {}
-
             }
-
-
         }
         // let ram_data = emulator.ram.borrow().read(0xFF00);
         // println!("current: {}", ram_data);
@@ -137,6 +132,3 @@ fn main() {
 
     //println!("Game loop exited.");
 }
-
-
-

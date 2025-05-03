@@ -83,27 +83,18 @@ impl CPU {
         value
     }
 
-    pub fn handle_interrupt(&mut self){
+    pub fn handle_interrupt(&mut self) {
         let ie = self.ram.borrow().read(0xFFFF);
         let iflag = self.ram.borrow().read(0xFF0F);
         let pending = ie & iflag;
-        // println!(
-        //     "pre service: IME: {}, IF: {:08b}, IE: {:08b} Halt: {}",
-        //     self.ime,
-        //     self.ram.borrow().read(0xFF0F),
-        //     self.ram.borrow().read(0xFFFF),
-        //     self.halted
-        // );
 
-    
         if self.halted {
-            self.cycles +=4;
+            self.cycles += 4;
         }
 
         if pending == 0 {
             return;
-        }
-        else {
+        } else {
             self.halted = false;
         }
 
@@ -140,6 +131,8 @@ impl CPU {
         self.halted = false;
         self.ime = false;
 
+        self.cycles += 8;
+
         self.push_pc();
 
         let mut iflag = self.ram.borrow().read(0xFF0F);
@@ -155,7 +148,6 @@ impl CPU {
             self.ram.borrow().read(0xFFFF),
             self.halted
         );
-
     }
 
     fn halt_bug(&mut self) {
@@ -179,8 +171,7 @@ impl CPU {
             .write(self.registers.get_sp(), (value & 0xFF) as u8);
     }
 
-    pub fn execute(&mut self, opcode: u8) -> u64 {
-        let initial_cycles = self.cycles;
+    pub fn execute(&mut self, opcode: u8) {
         match opcode {
             0x00 => {
                 //NOP
@@ -1755,7 +1746,7 @@ impl CPU {
                 let address = self.registers.get_and_inc_pc();
                 let data = self.ram.borrow().read(address);
                 self.and(data);
-                self.cycles +=4;
+                self.cycles += 4;
             }
             0xE7 => {
                 self.reset(0x20);
@@ -1777,7 +1768,7 @@ impl CPU {
             }
             0xE9 => {
                 self.registers.set_pc(self.registers.get_hl());
-                self.cycles+=4;
+                self.cycles += 4;
             }
             0xEA => {
                 let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1802,7 +1793,7 @@ impl CPU {
             0xEE => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.xor(data);
-                self.cycles+=4;
+                self.cycles += 4;
             }
             0xEF => {
                 self.reset(0x28);
@@ -1859,7 +1850,7 @@ impl CPU {
             0xF6 => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.or(data);
-                self.cycles+=4;
+                self.cycles += 4;
             }
             0xF7 => {
                 self.reset(0x30);
@@ -1912,9 +1903,6 @@ impl CPU {
                 self.reset(0x38);
             }
         }
-
-        let final_cycles = self.cycles.saturating_sub(initial_cycles);
-        return final_cycles;
     }
     fn cb(&mut self, opcode: u8) {
         match opcode {
