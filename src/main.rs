@@ -28,12 +28,12 @@ Tests Passed
  */
 
 fn main() {
-    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    //let rom = std::fs::read("roms/tetris.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/halt_bug.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg-test/2.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim00_div_trigger.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
@@ -94,8 +94,8 @@ fn main() {
 
 
         }
-        let ram_data = emulator.ram.borrow().read(0xFF00);
-        println!("current: {}", ram_data);
+        // let ram_data = emulator.ram.borrow().read(0xFF00);
+        // println!("current: {}", ram_data);
 
         // 2. Handle CPU Stopped or Halted State
         if emulator.cpu.stopped || emulator.cpu.halted {
@@ -137,3 +137,6 @@ fn main() {
 
     //println!("Game loop exited.");
 }
+
+
+
