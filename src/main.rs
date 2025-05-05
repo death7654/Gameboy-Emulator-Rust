@@ -31,6 +31,7 @@ fn main() {
     //let rom = std::fs::read("roms/tetris.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/halt_bug.gb").unwrap();
     let rom = std::fs::read("roms/test_roms/blargg/cpu_instrs/individual/02-interrupts.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/mem_timing-2/rom_singles/01-read_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
     //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
