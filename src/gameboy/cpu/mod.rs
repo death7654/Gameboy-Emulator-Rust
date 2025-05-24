@@ -298,9 +298,9 @@ impl CPU {
         self.nop();
     }
     fn increment_sp(&mut self) {
-        let sp = self.registers.get_hl();
+        let sp = self.registers.get_sp();
         self.nop();
-        self.registers.set_hl(sp.wrapping_add(1));
+        self.registers.set_sp(sp.wrapping_add(1));
         self.nop();
     }
     fn rlca(&mut self) {
@@ -366,8 +366,8 @@ impl CPU {
             }
             0x02 => {
                 //store the data in a into the ram address found in bc
-                self.nop();
                 self.store(self.registers.get_bc(), self.registers.get_a());
+                self.nop();
             }
             0x03 => {
                 //increment bc
@@ -418,9 +418,9 @@ impl CPU {
                 self.registers.set_hl(result);
             }
             0x0A => {
-                self.nop();
                 let data = self.ram.borrow().read(self.registers.get_bc());
                 self.load_a(data);
+                self.nop();
             }
             0x0B => {
                 //decrement BC
@@ -479,8 +479,8 @@ impl CPU {
                 self.registers.set_de(data);
             }
             0x12 => {
-                self.nop();
                 self.store(self.registers.get_de(), self.registers.get_a());
+                self.nop();
             }
             0x13 => {
                 self.increment_de();
@@ -537,9 +537,9 @@ impl CPU {
                 self.registers.set_hl(result);
             }
             0x1A => {
-                self.nop();
                 let data = self.ram.borrow().read(self.registers.get_de());
                 self.load_a(data);
+                self.nop();
             }
             0x1B => {
                 //decrement de
@@ -609,10 +609,10 @@ impl CPU {
             }
             0x22 => {
                 //load a into memory with the address found in HL and increment HL by 1
-                self.nop();
                 let hl = self.registers.get_hl();
                 self.store(hl, self.registers.get_a());
                 self.registers.set_hl(hl.wrapping_add(1));
+                self.nop();
             }
             0x23 => {
                 self.increment_hl();
@@ -653,11 +653,11 @@ impl CPU {
                 self.registers.set_hl(result);
             }
             0x2A => {
-                self.nop();
                 let address = self.registers.get_hl();
                 let data = self.ram.borrow().read(address);
                 self.registers.set_hl(address.wrapping_add(1));
                 self.load_a(data);
+                self.nop();
             }
             0x2B => {
                 self.nop();
@@ -712,10 +712,10 @@ impl CPU {
                 self.registers.set_sp(data);
             }
             0x32 => {
-                self.nop();
                 let hl = self.registers.get_hl();
                 self.store(hl, self.registers.get_a());
                 self.registers.set_hl(hl.wrapping_sub(1));
+                self.nop();
             }
             0x33 => {
                 self.increment_sp();
@@ -782,10 +782,10 @@ impl CPU {
             }
             0x36 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.nop();
                 self.ram.borrow_mut().write(address, data);
+                self.nop();
                 self.nop();
             }
             0x37 => {
@@ -1075,50 +1075,50 @@ impl CPU {
             }
             0x70 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_b());
                 self.nop();
+                self.nop();
             }
             0x71 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_c());
                 self.nop();
+                self.nop();
             }
             0x72 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_d());
                 self.nop();
+                self.nop();
             }
             0x73 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_e());
                 self.nop();
+                self.nop();
             }
             0x74 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_h());
                 self.nop();
+                self.nop();
             }
             0x75 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_l());
+                self.nop();
                 self.nop();
             }
             0x76 => {
@@ -1127,10 +1127,10 @@ impl CPU {
             }
             0x77 => {
                 let address = self.registers.get_hl();
-                self.nop();
                 self.ram
                     .borrow_mut()
                     .write(address, self.registers.get_a());
+                self.nop();
                 self.nop();
             }
             0x78 => {
@@ -1159,8 +1159,8 @@ impl CPU {
             }
             0x7E => {
                 let address = self.registers.get_hl();
-                self.nop();
                 let value = self.ram.borrow().read(address);
+                self.nop();
                 self.registers.set_a(value);
                 self.nop();
             }
@@ -1864,12 +1864,11 @@ impl CPU {
             }
             0xE0 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                self.nop();
                 let address = (0xFF00 as u16).wrapping_add(offset as u16);
                 self.nop();
 
                 self.ram.borrow_mut().write(address, self.registers.get_a());
-
+                self.nop();
                 self.nop();
             }
 
@@ -1890,9 +1889,8 @@ impl CPU {
             }
             0xE2 => {
                 let address = 0xff00 | self.registers.get_c() as u16;
-                self.nop();
                 self.ram.borrow_mut().write(address, self.registers.get_a());
-
+                self.nop();
                 self.nop();
             }
             0xE3 => {
@@ -1956,12 +1954,12 @@ impl CPU {
             }
             0xEA => {
                 let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                self.nop();
                 let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.nop();
                 let address = (upper as u16) << 8 | lower as u16;
                 self.nop();
                 self.ram.borrow_mut().write(address, self.registers.get_a());
+                self.nop();
                 self.nop();
             }
             0xEB => {
@@ -1986,10 +1984,10 @@ impl CPU {
             }
             0xF0 => {
                 let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                self.nop();
                 let address = 0xFF00u16.wrapping_add(offset as u16);
                 self.nop();
                 let value = self.ram.borrow().read(address);
+                self.nop();
                 self.registers.set_a(value);
                 self.nop();
             }
@@ -2074,12 +2072,12 @@ impl CPU {
             }
             0xFA => {
                 let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                self.nop();
                 let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.nop();
                 let address = ((upper as u16) << 8) | lower as u16;
                 self.nop();
                 self.registers.set_a(self.ram.borrow().read(address));
+                self.nop();
                 self.nop();
             }
             0xFB => {
@@ -2109,274 +2107,347 @@ impl CPU {
             0x00 => {
                 let data = self.rotate_without_carry(self.registers.get_b(), 0);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x01 => {
                 let data = self.rotate_without_carry(self.registers.get_c(), 0);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x02 => {
                 let data = self.rotate_without_carry(self.registers.get_d(), 0);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x03 => {
                 let data = self.rotate_without_carry(self.registers.get_e(), 0);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x04 => {
                 let data = self.rotate_without_carry(self.registers.get_h(), 0);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x05 => {
                 let data = self.rotate_without_carry(self.registers.get_l(), 0);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x06 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.rotate_without_carry(value, 0);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
+                self.nop();
             }
             0x07 => {
                 let data = self.rotate_without_carry(self.registers.get_a(), 0);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x08 => {
                 let data = self.rotate_without_carry(self.registers.get_b(), 1);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x09 => {
                 let data = self.rotate_without_carry(self.registers.get_c(), 1);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x0A => {
                 let data = self.rotate_without_carry(self.registers.get_d(), 1);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x0B => {
                 let data = self.rotate_without_carry(self.registers.get_e(), 1);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x0C => {
                 let data = self.rotate_without_carry(self.registers.get_h(), 1);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x0D => {
                 let data = self.rotate_without_carry(self.registers.get_l(), 1);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x0E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.rotate_without_carry(value, 1);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
-            }
+                self.nop();
+                }
             0x0F => {
                 let data = self.rotate_without_carry(self.registers.get_a(), 1);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x10 => {
                 let data = self.rotate(self.registers.get_b(), 0);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x11 => {
                 let data = self.rotate(self.registers.get_c(), 0);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x12 => {
                 let data = self.rotate(self.registers.get_d(), 0);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x13 => {
                 let data = self.rotate(self.registers.get_e(), 0);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x14 => {
                 let data = self.rotate(self.registers.get_h(), 0);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x15 => {
                 let data = self.rotate(self.registers.get_l(), 0);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x16 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.rotate(value, 0);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
-            }
+                self.nop();            }
             0x17 => {
                 let data = self.rotate(self.registers.get_a(), 0);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x18 => {
                 let data = self.rotate(self.registers.get_b(), 1);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x19 => {
                 let data = self.rotate(self.registers.get_c(), 1);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x1A => {
                 let data = self.rotate(self.registers.get_d(), 1);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x1B => {
                 let data = self.rotate(self.registers.get_e(), 1);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x1C => {
                 let data = self.rotate(self.registers.get_h(), 1);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x1D => {
                 let data = self.rotate(self.registers.get_l(), 1);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x1E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.rotate(value, 1);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
+                self.nop();
             }
             0x1F => {
                 let data = self.rotate(self.registers.get_a(), 1);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x20 => {
                 let data = self.shift(self.registers.get_b(), 0);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x21 => {
                 let data = self.shift(self.registers.get_c(), 0);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x22 => {
                 let data = self.shift(self.registers.get_d(), 0);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x23 => {
                 let data = self.shift(self.registers.get_e(), 0);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x24 => {
                 let data = self.shift(self.registers.get_h(), 0);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x25 => {
                 let data = self.shift(self.registers.get_l(), 0);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x26 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.shift(value, 0);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
-            }
+                self.nop();            }
             0x27 => {
                 let data = self.shift(self.registers.get_a(), 0);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x28 => {
                 let data = self.shift(self.registers.get_b(), 1);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x29 => {
                 let data = self.shift(self.registers.get_c(), 1);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x2A => {
                 let data = self.shift(self.registers.get_d(), 1);
                 self.registers.set_d(data);
+                self.nop();
             }
             0x2B => {
                 let data = self.shift(self.registers.get_e(), 1);
                 self.registers.set_e(data);
+                self.nop();
             }
             0x2C => {
                 let data = self.shift(self.registers.get_h(), 1);
                 self.registers.set_h(data);
+                self.nop();
             }
             0x2D => {
                 let data = self.shift(self.registers.get_l(), 1);
                 self.registers.set_l(data);
+                self.nop();
             }
             0x2E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.shift(value, 1);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
-            }
+                self.nop();
+                }
             0x2F => {
                 let data = self.shift(self.registers.get_a(), 1);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x30 => {
                 let data = self.swap(self.registers.get_b());
                 self.registers.set_b(data);
+                self.nop();
             }
             0x31 => {
                 let data = self.swap(self.registers.get_c());
                 self.registers.set_c(data);
+                self.nop();
             }
             0x32 => {
                 let data = self.swap(self.registers.get_d());
                 self.registers.set_d(data);
+                self.nop();
             }
             0x33 => {
                 let data = self.swap(self.registers.get_e());
                 self.registers.set_e(data);
+                self.nop();
             }
             0x34 => {
                 let data = self.swap(self.registers.get_h());
                 self.registers.set_h(data);
+                self.nop();
             }
             0x35 => {
                 let data = self.swap(self.registers.get_l());
                 self.registers.set_l(data);
+                self.nop();
             }
             0x36 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.swap(value);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
-            }
+                self.nop();            }
             0x37 => {
                 let data = self.swap(self.registers.get_a());
                 self.registers.set_a(data);
+                self.nop();
             }
             0x38 => {
                 let data = self.right_shift(self.registers.get_b());
                 self.registers.set_b(data);
+                self.nop();
             }
             0x39 => {
                 let data = self.right_shift(self.registers.get_c());
                 self.registers.set_c(data);
+                self.nop();
             }
             0x3A => {
                 let data = self.right_shift(self.registers.get_d());
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0x3B => {
                 let data = self.right_shift(self.registers.get_e());
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0x3C => {
                 let data = self.right_shift(self.registers.get_h());
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0x3D => {
                 let data = self.right_shift(self.registers.get_l());
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0x3E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
+                self.nop();
                 let data = self.right_shift(value);
+                self.nop();
                 self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.cycles += 8;
+                self.nop();
             }
             0x3F => {
                 let data = self.right_shift(self.registers.get_a());
                 self.registers.set_a(data);
+                self.nop();
             }
             0x40 => self.bit(self.registers.get_b(), 0),
             0x41 => self.bit(self.registers.get_c(), 0),
@@ -2385,9 +2456,9 @@ impl CPU {
             0x44 => self.bit(self.registers.get_h(), 0),
             0x45 => self.bit(self.registers.get_l(), 0),
             0x46 => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.bit(value, 0);
-               self.nop();
             }
             0x47 => self.bit(self.registers.get_a(), 0),
             0x48 => self.bit(self.registers.get_b(), 1),
@@ -2397,9 +2468,9 @@ impl CPU {
             0x4C => self.bit(self.registers.get_h(), 1),
             0x4D => self.bit(self.registers.get_l(), 1),
             0x4E => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.bit(value, 1);
-               self.nop();
             }
             0x4F => self.bit(self.registers.get_a(), 1),
             0x50 => self.bit(self.registers.get_b(), 2),
@@ -2409,9 +2480,9 @@ impl CPU {
             0x54 => self.bit(self.registers.get_h(), 2),
             0x55 => self.bit(self.registers.get_l(), 2),
             0x56 => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.bit(value, 2);
-               self.nop();
             }
             0x57 => self.bit(self.registers.get_a(), 2),
             0x58 => self.bit(self.registers.get_b(), 3),
@@ -2421,9 +2492,9 @@ impl CPU {
             0x5C => self.bit(self.registers.get_h(), 3),
             0x5D => self.bit(self.registers.get_l(), 3),
             0x5E => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.bit(value, 3);
-               self.nop();
             }
             0x5F => self.bit(self.registers.get_a(), 3),
             0x60 => self.bit(self.registers.get_b(), 4),
@@ -2433,9 +2504,9 @@ impl CPU {
             0x64 => self.bit(self.registers.get_h(), 4),
             0x65 => self.bit(self.registers.get_l(), 4),
             0x66 => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.bit(value, 4);
-               self.nop();
             }
             0x67 => self.bit(self.registers.get_a(), 4),
             0x68 => self.bit(self.registers.get_b(), 5),
@@ -2445,10 +2516,9 @@ impl CPU {
             0x6C => self.bit(self.registers.get_h(), 5),
             0x6D => self.bit(self.registers.get_l(), 5),
             0x6E => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
-
                 self.bit(value, 5);
-               self.nop();
             }
             0x6F => self.bit(self.registers.get_a(), 5),
             0x70 => self.bit(self.registers.get_b(), 6),
@@ -2458,10 +2528,9 @@ impl CPU {
             0x74 => self.bit(self.registers.get_h(), 6),
             0x75 => self.bit(self.registers.get_l(), 6),
             0x76 => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
-
                 self.bit(value, 6);
-               self.nop();
             }
             0x77 => self.bit(self.registers.get_a(), 6),
             0x78 => self.bit(self.registers.get_b(), 7),
@@ -2471,564 +2540,785 @@ impl CPU {
             0x7C => self.bit(self.registers.get_h(), 7),
             0x7D => self.bit(self.registers.get_l(), 7),
             0x7E => {
+                self.nop();
                 let value = self.ram.borrow().read(self.registers.get_hl());
-
                 self.bit(value, 7);
-               self.nop();
             }
             0x7F => self.bit(self.registers.get_a(), 7),
 
             0x80 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 0);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x81 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 0);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0x82 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 0);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0x83 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 0);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0x84 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 0);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0x85 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 0);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0x86 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 0));
-                self.cycles += 16;
+                self.nop();
             }
             0x87 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 0);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x88 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 1);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x89 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 1);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0x8A => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 1);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0x8B => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 1);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0x8C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0x8D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0x8E => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 1));
-                self.cycles += 16;
+                self.nop();
             }
             0x8F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 1);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x90 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 2);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0x91 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 2);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0x92 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 2);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0x93 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0x94 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0x95 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0x96 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 2));
-                self.cycles += 16;
+                self.nop();
             }
             0x97 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 2);
                 self.registers.set_a(data);
+                self.nop();
             }
             0x98 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 3);
                 self.registers.set_b(data);
+                self.nop();
             }
             0x99 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 3);
                 self.registers.set_c(data);
+                self.nop();
             }
             0x9A => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 3);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0x9B => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0x9C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0x9D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0x9E => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 3));
-                self.cycles += 16;
+                self.nop();
             }
             0x9F => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 3);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xA0 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 4);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xA1 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 4);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xA2 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 4);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xA3 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 4);
                 self.registers.set_e(data);
+                self.nop();
             }
             0xA4 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 4);
                 self.registers.set_h(data);
+                self.nop();
             }
             0xA5 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 4);
                 self.registers.set_l(data);
+                self.nop();
             }
             0xA6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 4));
-                self.cycles += 16;
+                self.nop();
             }
             0xA7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 4);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xA8 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 5);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xA9 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 5);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xAA => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 5);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xAB => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 5);
                 self.registers.set_e(data);
+                self.nop();
             }
             0xAC => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 5);
                 self.registers.set_h(data);
+                self.nop();
             }
             0xAD => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 5);
                 self.registers.set_l(data);
+                self.nop();
             }
             0xAE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 5));
-                self.cycles += 16;
+                self.nop();
             }
             0xAF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 5);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xB0 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 6);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xB1 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 6);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xB2 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 6);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xB3 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 6);
                 self.registers.set_e(data);
+                self.nop();
             }
             0xB4 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 6);
                 self.registers.set_h(data);
+                self.nop();
             }
             0xB5 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 6);
                 self.registers.set_l(data);
+                self.nop();
             }
             0xB6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 6));
-                self.cycles += 16;
+                self.nop();
             }
             0xB7 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 6);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xB8 => {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 7);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xB9 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 7);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xBA => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 7);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xBB => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 7);
                 self.registers.set_e(data);
+                self.nop();
             }
             0xBC => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 7);
                 self.registers.set_h(data);
+                self.nop();
             }
             0xBD => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 7);
                 self.registers.set_l(data);
+                self.nop();
             }
             0xBE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let data = self.ram.borrow().read(address);
+                self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 7));
-                self.cycles += 16;
+                self.nop();
             }
             0xBF => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 7);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xC0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 0);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xC1 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 0);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xC2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 0);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xC3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 0);
                 self.registers.set_e(data);
+                self.nop();
             }
             0xC4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 0);
                 self.registers.set_h(data);
+                self.nop();
             }
             0xC5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 0);
                 self.registers.set_l(data);
+                self.nop();
             }
             0xC6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 0);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xC7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 0);
                 self.registers.set_a(data);
+                self.nop();
+
             }
             0xC8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 1);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0xC9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 1);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xCA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 1);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xCB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 1);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xCC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xCD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xCE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 1);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xCF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 1);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xD0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 2);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xD1 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 2);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xD2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 2);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xD3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xD4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xD5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xD6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 2);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xD7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 2);
                 self.registers.set_a(data);
+                self.nop();
+
             }
             0xD8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 3);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0xD9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 3);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xDA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 3);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xDB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xDC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xDD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xDE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 3);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xDF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 3);
                 self.registers.set_a(data);
+                self.nop();
+
             }
             0xE0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 4);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0xE1 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 4);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xE2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 4);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xE3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 4);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xE4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 4);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xE5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 4);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xE6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 4);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xE7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 4);
                 self.registers.set_a(data);
+                self.nop();
+
             }
             0xE8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 5);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0xE9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 5);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xEA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 5);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xEB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 5);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xEC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 5);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xED => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 5);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xEE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 5);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xEF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 5);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xF0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 6);
                 self.registers.set_b(data);
+                self.nop();
             }
             0xF1 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 6);
                 self.registers.set_c(data);
+                self.nop();
             }
             0xF2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 6);
                 self.registers.set_d(data);
+                self.nop();
             }
             0xF3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 6);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xF4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 6);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xF5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 6);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xF6 => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 6);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xF7 => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 6);
                 self.registers.set_a(data);
+                self.nop();
             }
             0xF8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 7);
                 self.registers.set_b(data);
+                self.nop();
+
             }
             0xF9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 7);
                 self.registers.set_c(data);
+                self.nop();
+
             }
             0xFA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 7);
                 self.registers.set_d(data);
+                self.nop();
+
             }
             0xFB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 7);
                 self.registers.set_e(data);
+                self.nop();
+
             }
             0xFC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 7);
                 self.registers.set_h(data);
+                self.nop();
+
             }
             0xFD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 7);
                 self.registers.set_l(data);
+                self.nop();
+
             }
             0xFE => {
+                self.nop();
                 let address = self.registers.get_hl();
+                self.nop();
                 let byte = self.ram.borrow().read(address);
+                self.nop();
                 let new_byte = byte | (1 << 7);
                 self.ram.borrow_mut().write(address, new_byte);
-                self.cycles += 16;
+                self.nop();
             }
             0xFF => {
                 let data = self.set_bit_8bit(self.registers.get_a(), 7);
                 self.registers.set_a(data);
+                self.nop();
             }
         }
     }
@@ -3089,11 +3379,11 @@ impl CPU {
         result
     }
     fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
-        self.cycles += 8;
+        self.nop();
         value & !(1 << bit)
     }
     fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
-        self.cycles += 8;
+        self.nop();
         value | (1 << bit)
     }
     fn add_8bit(&mut self, b: u8) {
@@ -3315,6 +3605,7 @@ impl CPU {
     }
     fn rotate_without_carry(&mut self, mut value: u8, type_: u8) -> u8 {
         let bool;
+        self.nop();
         if type_ == 0 {
             bool = (value & 0x80) != 0;
             value = value.rotate_left(1);
@@ -3338,12 +3629,11 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
-
         value
     }
 
     fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
+        self.nop();
         let bool;
         let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
         if type_ == 0 {
@@ -3369,13 +3659,13 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
 
         value
     }
 
     fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
         // Read the old flags, but we’re going to build the new flags from scratch.
+        self.nop();
         let mut f: u8 = 0;
 
         if type_ == 0 {
@@ -3400,12 +3690,12 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
 
         value
     }
 
     fn swap(&mut self, value: u8) -> u8 {
+        self.nop();
         let result = (value >> 4) | (value << 4);
         let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
 
@@ -3415,10 +3705,11 @@ impl CPU {
             f &= !(FLAGS::Z as u8);
         }
         self.registers.set_f(f);
-        self.cycles += 8;
         result
     }
     fn right_shift(&mut self, mut value: u8) -> u8 {
+        self.nop();
+
         let lsb = (value & 0x01) != 0;
 
         value >>= 1;
@@ -3438,11 +3729,12 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
 
         value
     }
     fn bit(&mut self, value: u8, bit: u8) {
+        self.nop();
+        self.nop();
         let tested_bit = value & (1 << bit);
 
         let mut f = self.registers.get_f() | FLAGS::H as u8;
@@ -3455,6 +3747,5 @@ impl CPU {
         }
 
         self.registers.set_f(f);
-        self.cycles += 8;
     }
 }
