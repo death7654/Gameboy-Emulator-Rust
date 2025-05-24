@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::lcd;
 use super::ram::RAM;
+use crate::lcd;
 
 // DMG palettes for background and sprites.
 const DMG_BG_PALETTE: [[u8; 3]; 4] = [
@@ -23,10 +23,10 @@ const DMG_SPRITE_PALETTE: [[u8; 3]; 4] = [
 // VRAM layout constants (slice index 0 == address 0x8000)
 const VRAM_START: usize = 0x8000;
 
-const BG_MAP_UNSIGNED: usize = 0x9800; 
-const BG_MAP_SIGNED: usize = 0x9C00; 
+const BG_MAP_UNSIGNED: usize = 0x9800;
+const BG_MAP_SIGNED: usize = 0x9C00;
 
-const TILE_DATA_UNSIGNED: usize = 0x8000; 
+const TILE_DATA_UNSIGNED: usize = 0x8000;
 const TILE_DATA_SIGNED: usize = 0x8800;
 
 pub struct GPU {
@@ -53,7 +53,7 @@ impl GPU {
         let _window_enabled = lcdc & 0x20 != 0;
 
         // LCD off: white screen
-        if !lcd_on { 
+        if !lcd_on {
             self.framebuffer.fill(255);
             return;
         }
@@ -189,11 +189,7 @@ impl GPU {
             }
 
             // For the window, the tile map selection comes from LCDC bit 3 (0x08):
-            let win_map_base = if lcdc & 0x08 != 0 {
-                0x9C00
-            } else {
-                0x9800
-            };
+            let win_map_base = if lcdc & 0x08 != 0 { 0x9C00 } else { 0x9800 };
             let map_off = win_map_base - VRAM_START;
 
             // Use the same tile data select register as the background (LCDC bit 4).
