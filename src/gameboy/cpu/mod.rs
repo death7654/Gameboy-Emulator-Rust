@@ -2135,11 +2135,12 @@ impl CPU {
                 self.nop();
             }
             0x06 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.rotate_without_carry(value, 0);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();
             }
             0x07 => {
@@ -2178,11 +2179,12 @@ impl CPU {
                 self.nop();
             }
             0x0E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.rotate_without_carry(value, 1);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();
                 }
             0x0F => {
@@ -2221,11 +2223,12 @@ impl CPU {
                 self.nop();
             }
             0x16 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.rotate(value, 0);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();            }
             0x17 => {
                 let data = self.rotate(self.registers.get_a(), 0);
@@ -2263,11 +2266,12 @@ impl CPU {
                 self.nop();
             }
             0x1E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.rotate(value, 1);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();
             }
             0x1F => {
@@ -2306,11 +2310,12 @@ impl CPU {
                 self.nop();
             }
             0x26 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.shift(value, 0);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();            }
             0x27 => {
                 let data = self.shift(self.registers.get_a(), 0);
@@ -2348,11 +2353,12 @@ impl CPU {
                 self.nop();
             }
             0x2E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.shift(value, 1);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();
                 }
             0x2F => {
@@ -2391,12 +2397,14 @@ impl CPU {
                 self.nop();
             }
             0x36 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.swap(value);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
-                self.nop();            }
+                self.nop();            
+            }
             0x37 => {
                 let data = self.swap(self.registers.get_a());
                 self.registers.set_a(data);
@@ -2437,11 +2445,12 @@ impl CPU {
 
             }
             0x3E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let address = self.registers.get_hl();
                 self.nop();
+                let value = self.ram.borrow().read(address);
                 let data = self.right_shift(value);
+                self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.ram.borrow_mut().write(self.registers.get_hl(), data);
                 self.nop();
             }
             0x3F => {
@@ -2582,13 +2591,14 @@ impl CPU {
 
             }
             0x86 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 0));
                 self.nop();
+                self.nop();
+
             }
             0x87 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 0);
@@ -2631,12 +2641,12 @@ impl CPU {
 
             }
             0x8E => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 1));
+                self.nop();
                 self.nop();
             }
             0x8F => {
@@ -2681,12 +2691,12 @@ impl CPU {
 
             }
             0x96 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 2));
+                self.nop();
                 self.nop();
             }
             0x97 => {
@@ -2729,12 +2739,12 @@ impl CPU {
 
             }
             0x9E => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 3));
+                self.nop();
                 self.nop();
             }
             0x9F => {
@@ -2773,12 +2783,12 @@ impl CPU {
                 self.nop();
             }
             0xA6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 4));
+                self.nop();
                 self.nop();
             }
             0xA7 => {
@@ -2817,12 +2827,12 @@ impl CPU {
                 self.nop();
             }
             0xAE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 5));
+                self.nop();
                 self.nop();
             }
             0xAF => {
@@ -2861,12 +2871,12 @@ impl CPU {
                 self.nop();
             }
             0xB6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 6));
+                self.nop();
                 self.nop();
             }
             0xB7 => {
@@ -2905,12 +2915,12 @@ impl CPU {
                 self.nop();
             }
             0xBE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let data = self.ram.borrow().read(address);
                 self.nop();
                 self.ram.borrow_mut().write(address, data & !(1 << 7));
+                self.nop();
                 self.nop();
             }
             0xBF => {
@@ -2949,13 +2959,13 @@ impl CPU {
                 self.nop();
             }
             0xC6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 0);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xC7 => {
@@ -3001,13 +3011,13 @@ impl CPU {
 
             }
             0xCE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 1);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xCF => {
@@ -3051,13 +3061,13 @@ impl CPU {
 
             }
             0xD6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 2);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xD7 => {
@@ -3103,13 +3113,13 @@ impl CPU {
 
             }
             0xDE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 3);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xDF => {
@@ -3155,13 +3165,13 @@ impl CPU {
 
             }
             0xE6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 4);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xE7 => {
@@ -3207,13 +3217,13 @@ impl CPU {
 
             }
             0xEE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 5);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xEF => {
@@ -3255,13 +3265,13 @@ impl CPU {
 
             }
             0xF6 => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 6);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xF7 => {
@@ -3306,13 +3316,13 @@ impl CPU {
 
             }
             0xFE => {
-                self.nop();
                 let address = self.registers.get_hl();
                 self.nop();
                 let byte = self.ram.borrow().read(address);
                 self.nop();
                 let new_byte = byte | (1 << 7);
                 self.ram.borrow_mut().write(address, new_byte);
+                self.nop();
                 self.nop();
             }
             0xFF => {
@@ -3604,8 +3614,8 @@ impl CPU {
 
     }
     fn rotate_without_carry(&mut self, mut value: u8, type_: u8) -> u8 {
-        let bool;
         self.nop();
+        let bool;
         if type_ == 0 {
             bool = (value & 0x80) != 0;
             value = value.rotate_left(1);
@@ -3711,7 +3721,6 @@ impl CPU {
         self.nop();
 
         let lsb = (value & 0x01) != 0;
-
         value >>= 1;
 
         let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
@@ -3721,6 +3730,7 @@ impl CPU {
         } else {
             f &= !(FLAGS::Z as u8);
         }
+
 
         if lsb {
             f |= FLAGS::C as u8;

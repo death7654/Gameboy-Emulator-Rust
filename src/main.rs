@@ -28,10 +28,10 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/drmario.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/blargg/mem_timing/individual/03-modify_timing.gb").unwrap();
-    // let rom =
-    //     std::fs::read("roms/test_roms/blargg/cpu_instrs/individual/01-special.gb").unwrap();
+    //let rom = std::fs::read("roms/tetris.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/interrupt_time/interrupt_time.gb").unwrap();
+     let rom =
+         std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
