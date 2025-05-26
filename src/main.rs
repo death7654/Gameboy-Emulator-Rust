@@ -28,14 +28,14 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/tetris.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/interrupt_time/interrupt_time.gb").unwrap();
-     let rom =
-         std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
+    //let rom =
+    //     std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/blargg/mem_timing-2/mem_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim00.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
@@ -95,7 +95,7 @@ fn main() {
         if emulator.cpu.stopped {
             emulator.cpu.handle_interrupt();
 
-            emulator.cpu.cycles += 4;
+                emulator.cpu.nop();
             continue 'gameloop;
         }
 
@@ -103,7 +103,7 @@ fn main() {
             emulator.cpu.handle_interrupt();
 
             if emulator.cpu.halted {
-                emulator.cpu.cycles += 4;
+                emulator.cpu.nop();
                 continue 'gameloop;
             }
         }

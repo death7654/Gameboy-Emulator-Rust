@@ -105,7 +105,7 @@ impl CPU {
         let pending = ie & iflag;
 
         if self.halted {
-           self.nop();
+            self.nop();
         }
 
         if pending == 0 {
@@ -129,6 +129,9 @@ impl CPU {
                 (3, 0x0058), // Serial
                 (4, 0x0060), // Joypad
             ] {
+                if bit == 2 {
+                    self.timer.tima_overflowed = false;
+                }
                 if (pending & (1 << bit)) != 0 {
                     self.service_interrupt(bit, vector);
                     break;
@@ -191,14 +194,11 @@ impl CPU {
     fn tick(&mut self) {
         self.timer.timer(4);
 
-        if(self.ime_queued)
-        {
+        if (self.ime_queued) {
             self.ime = true;
         }
-
-
     }
-    fn nop(&mut self) {
+    pub fn nop(&mut self) {
         self.tick();
     }
     fn load_16(&mut self, address: u16) -> u8 {
@@ -344,6 +344,429 @@ impl CPU {
         self.registers.set_f(f);
         self.nop();
         result
+    }
+    fn increment_8_bit(&mut self, data: u8) -> u8 {
+        let result = data.wrapping_add(1);
+
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f &= !(FLAGS::N as u8);
+
+        //setting H flag
+
+        if (data & 0x0F) + 1 > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+        result
+    }
+    fn decrement_8_bit(&mut self, data: u8) -> u8 {
+        let result = data.wrapping_sub(1);
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f |= FLAGS::N as u8;
+
+        //setting H flag
+
+        if (data & 0x0F) == 0 {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f & 0xF0);
+        self.nop();
+        result
+    }
+    fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
+        self.nop();
+        value & !(1 << bit)
+    }
+    fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
+        self.nop();
+        value | (1 << bit)
+    }
+    fn add_8bit(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let (result, carry) = a.overflowing_add(b); // Separate carry result
+
+        let mut f = self.registers.get_f()
+            & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+
+        self.registers.set_a(result);
+        // Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        // H flag
+        if (a & 0x0F) + (b & 0x0F) > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if carry {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+    fn add_with_carry(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
+        let (result, carry1) = a.overflowing_add(b);
+        let (result, carry2) = result.overflowing_add(carry);
+
+        let mut f = self.registers.get_f()
+            & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        if (a & 0x0F) + (b & 0x0F) + carry > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if carry1 || carry2 {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+        self.registers.set_a(result);
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+    fn sub_8bit(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let (result, borrow) = a.overflowing_sub(b);
+
+        let mut f = self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+        f |= FLAGS::N as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        }
+
+        if (a & 0x0F).wrapping_sub(b & 0x0F) & 0x10 != 0 {
+            f |= FLAGS::H as u8;
+        }
+
+        if borrow {
+            f |= FLAGS::C as u8;
+        }
+
+        self.registers.set_a(result);
+        self.registers.set_f(f);
+        self.nop();
+    }
+    fn sub_with_carry(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
+
+        let (temp_result, borrow1) = a.overflowing_sub(b);
+        let (result, borrow2) = temp_result.overflowing_sub(carry); // Subtract carry
+
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() | FLAGS::N as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if (a & 0x0F).wrapping_sub(b & 0x0F).wrapping_sub(carry) > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8)
+        }
+
+        if borrow1 || borrow2 {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+
+    fn and(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a & b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::C as u8);
+        f |= FLAGS::H as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+    fn xor(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a ^ b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+    fn or(&mut self, b: u8) {
+        let a = self.registers.get_a();
+        let result = a | b;
+        self.registers.set_a(result);
+
+        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+
+    fn compare(&mut self, n8: u8) {
+        let a = self.registers.get_a();
+        let result = a.wrapping_sub(n8);
+
+        let mut f = self.registers.get_f() | FLAGS::N as u8;
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        if (a & 0x0F) < (n8 & 0x0F) {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        if a < n8 {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop();
+    }
+
+    fn reset(&mut self, address: u16) {
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.nop();
+        self.ram.borrow_mut().write(
+            self.registers.get_sp(),
+            (self.registers.get_pc() >> 8) as u8,
+        );
+        self.nop();
+        self.registers
+            .set_sp(self.registers.get_sp().wrapping_sub(1));
+        self.nop();
+        self.ram.borrow_mut().write(
+            self.registers.get_sp(),
+            (self.registers.get_pc() & 0xFF) as u8,
+        );
+
+        self.registers.set_pc(address);
+        self.nop();
+    }
+    fn rotate_without_carry(&mut self, mut value: u8, type_: u8) -> u8 {
+        self.nop();
+        let bool;
+        if type_ == 0 {
+            bool = (value & 0x80) != 0;
+            value = value.rotate_left(1);
+        } else {
+            bool = (value & 0x01) != 0;
+            value = value.rotate_right(1);
+        }
+
+        let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if bool {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+        value
+    }
+
+    fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
+        self.nop();
+        let bool;
+        let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
+        if type_ == 0 {
+            bool = (value & 0x80) != 0;
+            value = (value << 1) | (carry as u8);
+        } else {
+            bool = (value & 0x01) != 0;
+            value = (value >> 1) | ((carry as u8) << 7);
+        }
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8)
+        }
+
+        if bool {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8)
+        }
+
+        self.registers.set_f(f);
+
+        value
+    }
+
+    fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
+        // Read the old flags, but we’re going to build the new flags from scratch.
+        self.nop();
+        let mut f: u8 = 0;
+
+        if type_ == 0 {
+            let msb = (value & 0x80) != 0;
+            value <<= 1;
+            if msb {
+                f |= FLAGS::C as u8;
+            }
+        } else {
+            let lsb = (value & 0x01) != 0;
+            let msb = value & 0x80;
+            value = (value >> 1) | msb;
+            if lsb {
+                f |= FLAGS::C as u8;
+            }
+        }
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
+
+        value
+    }
+
+    fn swap(&mut self, value: u8) -> u8 {
+        self.nop();
+        let result = (value >> 4) | (value << 4);
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
+
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+        self.registers.set_f(f);
+        result
+    }
+    fn right_shift(&mut self, mut value: u8) -> u8 {
+        self.nop();
+
+        let lsb = (value & 0x01) != 0;
+        value >>= 1;
+
+        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
+
+        if value == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        if lsb {
+            f |= FLAGS::C as u8;
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+
+        value
+    }
+    fn bit(&mut self, value: u8, bit: u8) {
+        self.nop();
+        self.nop();
+        let tested_bit = value & (1 << bit);
+
+        let mut f = self.registers.get_f() | FLAGS::H as u8;
+        f &= !(FLAGS::N as u8);
+
+        if tested_bit == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        self.registers.set_f(f);
     }
 
     pub fn execute(&mut self, opcode: u8) {
@@ -880,23 +1303,23 @@ impl CPU {
             }
             0x41 => {
                 self.registers.set_b(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x42 => {
                 self.registers.set_b(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x43 => {
                 self.registers.set_b(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x44 => {
                 self.registers.set_b(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x45 => {
                 self.registers.set_b(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x46 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -906,30 +1329,30 @@ impl CPU {
             }
             0x47 => {
                 self.registers.set_b(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x48 => {
                 self.registers.set_c(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x49 => {
-               self.nop();
+                self.nop();
             }
             0x4A => {
                 self.registers.set_c(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x4B => {
                 self.registers.set_c(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x4C => {
                 self.registers.set_c(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x4D => {
                 self.registers.set_c(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x4E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -939,30 +1362,30 @@ impl CPU {
             }
             0x4F => {
                 self.registers.set_c(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x50 => {
                 self.registers.set_d(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x51 => {
                 self.registers.set_d(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x52 => {
-               self.nop();
+                self.nop();
             }
             0x53 => {
                 self.registers.set_d(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x54 => {
                 self.registers.set_d(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x55 => {
                 self.registers.set_d(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x56 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -972,30 +1395,30 @@ impl CPU {
             }
             0x57 => {
                 self.registers.set_d(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x58 => {
                 self.registers.set_e(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x59 => {
                 self.registers.set_e(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x5A => {
                 self.registers.set_e(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x5B => {
-               self.nop();
+                self.nop();
             }
             0x5C => {
                 self.registers.set_e(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x5D => {
                 self.registers.set_e(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x5E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -1005,30 +1428,30 @@ impl CPU {
             }
             0x5F => {
                 self.registers.set_e(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x60 => {
                 self.registers.set_h(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x61 => {
                 self.registers.set_h(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x62 => {
                 self.registers.set_h(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x63 => {
                 self.registers.set_h(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x64 => {
-               self.nop();
+                self.nop();
             }
             0x65 => {
                 self.registers.set_h(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x66 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -1038,30 +1461,30 @@ impl CPU {
             }
             0x67 => {
                 self.registers.set_h(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x68 => {
                 self.registers.set_l(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x69 => {
                 self.registers.set_l(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x6A => {
                 self.registers.set_l(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x6B => {
                 self.registers.set_l(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x6C => {
                 self.registers.set_l(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x6D => {
-               self.nop();
+                self.nop();
             }
             0x6E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
@@ -1071,53 +1494,41 @@ impl CPU {
             }
             0x6F => {
                 self.registers.set_l(self.registers.get_a());
-               self.nop();
+                self.nop();
             }
             0x70 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_b());
+                self.ram.borrow_mut().write(address, self.registers.get_b());
                 self.nop();
                 self.nop();
             }
             0x71 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_c());
+                self.ram.borrow_mut().write(address, self.registers.get_c());
                 self.nop();
                 self.nop();
             }
             0x72 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_d());
+                self.ram.borrow_mut().write(address, self.registers.get_d());
                 self.nop();
                 self.nop();
             }
             0x73 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_e());
+                self.ram.borrow_mut().write(address, self.registers.get_e());
                 self.nop();
                 self.nop();
             }
             0x74 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_h());
+                self.ram.borrow_mut().write(address, self.registers.get_h());
                 self.nop();
                 self.nop();
             }
             0x75 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_l());
+                self.ram.borrow_mut().write(address, self.registers.get_l());
                 self.nop();
                 self.nop();
             }
@@ -1127,35 +1538,33 @@ impl CPU {
             }
             0x77 => {
                 let address = self.registers.get_hl();
-                self.ram
-                    .borrow_mut()
-                    .write(address, self.registers.get_a());
+                self.ram.borrow_mut().write(address, self.registers.get_a());
                 self.nop();
                 self.nop();
             }
             0x78 => {
                 self.registers.set_a(self.registers.get_b());
-               self.nop();
+                self.nop();
             }
             0x79 => {
                 self.registers.set_a(self.registers.get_c());
-               self.nop();
+                self.nop();
             }
             0x7A => {
                 self.registers.set_a(self.registers.get_d());
-               self.nop();
+                self.nop();
             }
             0x7B => {
                 self.registers.set_a(self.registers.get_e());
-               self.nop();
+                self.nop();
             }
             0x7C => {
                 self.registers.set_a(self.registers.get_h());
-               self.nop();
+                self.nop();
             }
             0x7D => {
                 self.registers.set_a(self.registers.get_l());
-               self.nop();
+                self.nop();
             }
             0x7E => {
                 let address = self.registers.get_hl();
@@ -1165,7 +1574,7 @@ impl CPU {
                 self.nop();
             }
             0x7F => {
-               self.nop();
+                self.nop();
             }
             0x80 => {
                 self.add_8bit(self.registers.get_b());
@@ -1188,7 +1597,7 @@ impl CPU {
             0x86 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.add_8bit(value);
-               self.nop();
+                self.nop();
             }
             0x87 => {
                 self.add_8bit(self.registers.get_a());
@@ -1214,7 +1623,7 @@ impl CPU {
             0x8E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.add_with_carry(value);
-               self.nop();
+                self.nop();
             }
             0x8F => {
                 self.add_with_carry(self.registers.get_a());
@@ -1240,7 +1649,7 @@ impl CPU {
             0x96 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.sub_8bit(value);
-               self.nop();
+                self.nop();
             }
             0x97 => {
                 self.sub_8bit(self.registers.get_a());
@@ -1269,7 +1678,7 @@ impl CPU {
             0x9E => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.sub_with_carry(value);
-               self.nop();
+                self.nop();
             }
             0x9F => {
                 let a = self.registers.get_a();
@@ -1295,7 +1704,7 @@ impl CPU {
                 }
 
                 self.registers.set_f(f);
-               self.nop();
+                self.nop();
             }
             0xA0 => {
                 self.and(self.registers.get_b());
@@ -1318,7 +1727,7 @@ impl CPU {
             0xA6 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.and(value);
-               self.nop();
+                self.nop();
             }
             0xA7 => {
                 self.and(self.registers.get_a());
@@ -1344,7 +1753,7 @@ impl CPU {
             0xAE => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.xor(value);
-               self.nop();
+                self.nop();
             }
             0xAF => {
                 self.xor(self.registers.get_a());
@@ -1372,7 +1781,7 @@ impl CPU {
             0xB6 => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.or(value);
-               self.nop();
+                self.nop();
             }
             0xB7 => {
                 self.or(self.registers.get_a());
@@ -1398,7 +1807,7 @@ impl CPU {
             0xBE => {
                 let value = self.ram.borrow().read(self.registers.get_hl());
                 self.compare(value);
-               self.nop();
+                self.nop();
             }
             0xBF => {
                 self.compare(self.registers.get_a());
@@ -1411,7 +1820,7 @@ impl CPU {
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     let lower_byte = self.ram.borrow().read(self.registers.get_sp());
                     self.nop();
-                    
+
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop();
@@ -1452,7 +1861,7 @@ impl CPU {
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     self.nop();
                     self.registers.set_pc(address);
-                    
+
                     self.nop();
                 } else {
                     self.nop();
@@ -1517,12 +1926,11 @@ impl CPU {
                     .borrow_mut()
                     .write(self.registers.get_sp(), (bc & 0xFF) as u8);
                 self.nop();
-
             }
             0xC6 => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.add_8bit(data);
-               self.nop();
+                self.nop();
             }
             0xC7 => {
                 self.reset(0x00);
@@ -1562,7 +1970,6 @@ impl CPU {
 
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.registers.set_pc(address);
-
             }
             0xCA => {
                 let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1646,7 +2053,7 @@ impl CPU {
             0xCE => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.add_with_carry(data);
-               self.nop();
+                self.nop();
             }
             0xCF => {
                 self.reset(0x08);
@@ -1667,7 +2074,6 @@ impl CPU {
                     let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                     self.registers.set_pc(address);
                     self.nop();
-
                 } else {
                     self.nop();
                 }
@@ -1685,7 +2091,6 @@ impl CPU {
 
                 let value = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.registers.set_de(value);
-
             }
             0xD2 => {
                 let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1704,7 +2109,7 @@ impl CPU {
             }
             0xD3 => {
                 println!("D3 NOT VALID");
-               self.nop();
+                self.nop();
             }
             0xD4 => {
                 let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1758,7 +2163,7 @@ impl CPU {
                 let address = self.registers.get_and_inc_pc();
                 let data = self.ram.borrow().read(address);
                 self.sub_8bit(data);
-               self.nop();
+                self.nop();
             }
             0xD7 => {
                 self.reset(0x10);
@@ -1817,7 +2222,7 @@ impl CPU {
             }
             0xDB => {
                 println!("DB ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xDC => {
                 let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1852,12 +2257,12 @@ impl CPU {
             }
             0xDD => {
                 println!("ILLEGAL_DD");
-               self.nop();
+                self.nop();
             }
             0xDE => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.sub_with_carry(data);
-               self.nop();
+                self.nop();
             }
             0xDF => {
                 self.reset(0x18);
@@ -1895,11 +2300,11 @@ impl CPU {
             }
             0xE3 => {
                 print!("E3 is Illegal");
-               self.nop();
+                self.nop();
             }
             0xE4 => {
                 print!("E4 is Illegal");
-               self.nop();
+                self.nop();
             }
             0xE5 => {
                 let hl = self.registers.get_hl();
@@ -1919,13 +2324,13 @@ impl CPU {
                     .borrow_mut()
                     .write(self.registers.get_sp(), (hl & 0xFF) as u8);
 
-                    self.nop();
-                }
+                self.nop();
+            }
             0xE6 => {
                 let address = self.registers.get_and_inc_pc();
                 let data = self.ram.borrow().read(address);
                 self.and(data);
-               self.nop();
+                self.nop();
             }
             0xE7 => {
                 self.reset(0x20);
@@ -1950,7 +2355,7 @@ impl CPU {
             }
             0xE9 => {
                 self.registers.set_pc(self.registers.get_hl());
-               self.nop();
+                self.nop();
             }
             0xEA => {
                 let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
@@ -1964,20 +2369,20 @@ impl CPU {
             }
             0xEB => {
                 println!("EB ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xEC => {
                 println!("EC ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xED => {
                 println!("ED ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xEE => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.xor(data);
-               self.nop();
+                self.nop();
             }
             0xEF => {
                 self.reset(0x28);
@@ -2004,7 +2409,6 @@ impl CPU {
 
                 let value = ((upper_byte as u16) << 8) | (lower_byte & 0xF0) as u16;
                 self.registers.set_af(value);
-
             }
             0xF2 => {
                 let address = 0xFF00 | self.registers.get_c() as u16;
@@ -2015,11 +2419,11 @@ impl CPU {
             }
             0xF3 => {
                 self.ime = false;
-               self.nop();
+                self.nop();
             }
             0xF4 => {
                 println!("ILLEGAL F4");
-               self.nop();
+                self.nop();
             }
             0xF5 => {
                 let af = self.registers.get_af();
@@ -2037,12 +2441,12 @@ impl CPU {
                     .borrow_mut()
                     .write(self.registers.get_sp(), (0xFF & af) as u8);
 
-                    self.nop();
-                }
+                self.nop();
+            }
             0xF6 => {
                 let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.or(data);
-               self.nop();
+                self.nop();
             }
             0xF7 => {
                 self.reset(0x30);
@@ -2086,16 +2490,16 @@ impl CPU {
             }
             0xFC => {
                 println!("FC ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xFD => {
                 println!("FD ILLEGAL");
-               self.nop();
+                self.nop();
             }
             0xFE => {
                 let n8 = self.ram.borrow().read(self.registers.get_and_inc_pc());
                 self.compare(n8);
-               self.nop();
+                self.nop();
             }
             0xFF => {
                 self.reset(0x38);
@@ -2186,7 +2590,7 @@ impl CPU {
                 self.ram.borrow_mut().write(address, data);
                 self.nop();
                 self.nop();
-                }
+            }
             0x0F => {
                 let data = self.rotate_without_carry(self.registers.get_a(), 1);
                 self.registers.set_a(data);
@@ -2229,7 +2633,8 @@ impl CPU {
                 let data = self.rotate(value, 0);
                 self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.nop();            }
+                self.nop();
+            }
             0x17 => {
                 let data = self.rotate(self.registers.get_a(), 0);
                 self.registers.set_a(data);
@@ -2316,7 +2721,8 @@ impl CPU {
                 let data = self.shift(value, 0);
                 self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.nop();            }
+                self.nop();
+            }
             0x27 => {
                 let data = self.shift(self.registers.get_a(), 0);
                 self.registers.set_a(data);
@@ -2360,7 +2766,7 @@ impl CPU {
                 self.ram.borrow_mut().write(address, data);
                 self.nop();
                 self.nop();
-                }
+            }
             0x2F => {
                 let data = self.shift(self.registers.get_a(), 1);
                 self.registers.set_a(data);
@@ -2403,7 +2809,7 @@ impl CPU {
                 let data = self.swap(value);
                 self.ram.borrow_mut().write(address, data);
                 self.nop();
-                self.nop();            
+                self.nop();
             }
             0x37 => {
                 let data = self.swap(self.registers.get_a());
@@ -2424,25 +2830,21 @@ impl CPU {
                 let data = self.right_shift(self.registers.get_d());
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0x3B => {
                 let data = self.right_shift(self.registers.get_e());
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0x3C => {
                 let data = self.right_shift(self.registers.get_h());
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0x3D => {
                 let data = self.right_shift(self.registers.get_l());
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0x3E => {
                 let address = self.registers.get_hl();
@@ -2564,31 +2966,26 @@ impl CPU {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 0);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0x82 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 0);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0x83 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 0);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0x84 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 0);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0x85 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 0);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0x86 => {
                 let address = self.registers.get_hl();
@@ -2598,7 +2995,6 @@ impl CPU {
                 self.ram.borrow_mut().write(address, data & !(1 << 0));
                 self.nop();
                 self.nop();
-
             }
             0x87 => {
                 let data = self.zero_bit_8bit(self.registers.get_a(), 0);
@@ -2614,31 +3010,26 @@ impl CPU {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 1);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0x8A => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 1);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0x8B => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 1);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0x8C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0x8D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0x8E => {
                 let address = self.registers.get_hl();
@@ -2658,37 +3049,31 @@ impl CPU {
                 let data = self.zero_bit_8bit(self.registers.get_b(), 2);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0x91 => {
                 let data = self.zero_bit_8bit(self.registers.get_c(), 2);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0x92 => {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 2);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0x93 => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0x94 => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0x95 => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0x96 => {
                 let address = self.registers.get_hl();
@@ -2718,25 +3103,21 @@ impl CPU {
                 let data = self.zero_bit_8bit(self.registers.get_d(), 3);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0x9B => {
                 let data = self.zero_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0x9C => {
                 let data = self.zero_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0x9D => {
                 let data = self.zero_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0x9E => {
                 let address = self.registers.get_hl();
@@ -2972,43 +3353,36 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_a(), 0);
                 self.registers.set_a(data);
                 self.nop();
-
             }
             0xC8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 1);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0xC9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 1);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xCA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 1);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xCB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 1);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xCC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 1);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xCD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 1);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xCE => {
                 let address = self.registers.get_hl();
@@ -3034,31 +3408,26 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_c(), 2);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xD2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 2);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xD3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 2);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xD4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 2);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xD5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 2);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xD6 => {
                 let address = self.registers.get_hl();
@@ -3074,43 +3443,36 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_a(), 2);
                 self.registers.set_a(data);
                 self.nop();
-
             }
             0xD8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 3);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0xD9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 3);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xDA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 3);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xDB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 3);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xDC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 3);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xDD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 3);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xDE => {
                 let address = self.registers.get_hl();
@@ -3126,43 +3488,36 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_a(), 3);
                 self.registers.set_a(data);
                 self.nop();
-
             }
             0xE0 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 4);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0xE1 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 4);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xE2 => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 4);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xE3 => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 4);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xE4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 4);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xE5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 4);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xE6 => {
                 let address = self.registers.get_hl();
@@ -3178,43 +3533,36 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_a(), 4);
                 self.registers.set_a(data);
                 self.nop();
-
             }
             0xE8 => {
                 let data = self.set_bit_8bit(self.registers.get_b(), 5);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0xE9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 5);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xEA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 5);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xEB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 5);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xEC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 5);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xED => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 5);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xEE => {
                 let address = self.registers.get_hl();
@@ -3250,19 +3598,16 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_e(), 6);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xF4 => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 6);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xF5 => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 6);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xF6 => {
                 let address = self.registers.get_hl();
@@ -3283,37 +3628,31 @@ impl CPU {
                 let data = self.set_bit_8bit(self.registers.get_b(), 7);
                 self.registers.set_b(data);
                 self.nop();
-
             }
             0xF9 => {
                 let data = self.set_bit_8bit(self.registers.get_c(), 7);
                 self.registers.set_c(data);
                 self.nop();
-
             }
             0xFA => {
                 let data = self.set_bit_8bit(self.registers.get_d(), 7);
                 self.registers.set_d(data);
                 self.nop();
-
             }
             0xFB => {
                 let data = self.set_bit_8bit(self.registers.get_e(), 7);
                 self.registers.set_e(data);
                 self.nop();
-
             }
             0xFC => {
                 let data = self.set_bit_8bit(self.registers.get_h(), 7);
                 self.registers.set_h(data);
                 self.nop();
-
             }
             0xFD => {
                 let data = self.set_bit_8bit(self.registers.get_l(), 7);
                 self.registers.set_l(data);
                 self.nop();
-
             }
             0xFE => {
                 let address = self.registers.get_hl();
@@ -3331,431 +3670,5 @@ impl CPU {
                 self.nop();
             }
         }
-    }
-
-    fn increment_8_bit(&mut self, data: u8) -> u8 {
-        let result = data.wrapping_add(1);
-
-        let mut f = self.registers.get_f();
-
-        //setting Z flag
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        //setting N flag
-
-        f &= !(FLAGS::N as u8);
-
-        //setting H flag
-
-        if (data & 0x0F) + 1 > 0x0F {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        self.registers.set_f(f);
-        self.nop();
-        result
-    }
-    fn decrement_8_bit(&mut self, data: u8) -> u8 {
-        let result = data.wrapping_sub(1);
-        let mut f = self.registers.get_f();
-
-        //setting Z flag
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        //setting N flag
-
-        f |= FLAGS::N as u8;
-
-        //setting H flag
-
-        if (data & 0x0F) == 0 {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        self.registers.set_f(f & 0xF0);
-        self.nop();
-        result
-    }
-    fn zero_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
-        self.nop();
-        value & !(1 << bit)
-    }
-    fn set_bit_8bit(&mut self, value: u8, bit: u8) -> u8 {
-        self.nop();
-        value | (1 << bit)
-    }
-    fn add_8bit(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let (result, carry) = a.overflowing_add(b); // Separate carry result
-
-        let mut f = self.registers.get_f()
-            & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
-
-        self.registers.set_a(result);
-        // Z flag
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        // H flag
-        if (a & 0x0F) + (b & 0x0F) > 0x0F {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        if carry {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8);
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-    fn add_with_carry(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
-        let (result, carry1) = a.overflowing_add(b);
-        let (result, carry2) = result.overflowing_add(carry);
-
-        let mut f = self.registers.get_f()
-            & !(FLAGS::Z as u8 | FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        if (a & 0x0F) + (b & 0x0F) + carry > 0x0F {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        if carry1 || carry2 {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8);
-        }
-        self.registers.set_a(result);
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-    fn sub_8bit(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let (result, borrow) = a.overflowing_sub(b);
-
-        let mut f = self.registers.get_f() & !(FLAGS::Z as u8 | FLAGS::H as u8 | FLAGS::C as u8);
-        f |= FLAGS::N as u8;
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        }
-
-        if (a & 0x0F).wrapping_sub(b & 0x0F) & 0x10 != 0 {
-            f |= FLAGS::H as u8;
-        }
-
-        if borrow {
-            f |= FLAGS::C as u8;
-        }
-
-        self.registers.set_a(result);
-        self.registers.set_f(f);
-       self.nop();
-    }
-    fn sub_with_carry(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
-
-        let (temp_result, borrow1) = a.overflowing_sub(b);
-        let (result, borrow2) = temp_result.overflowing_sub(carry); // Subtract carry
-
-        self.registers.set_a(result);
-
-        let mut f = self.registers.get_f() | FLAGS::N as u8;
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8)
-        }
-
-        if (a & 0x0F).wrapping_sub(b & 0x0F).wrapping_sub(carry) > 0x0F {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8)
-        }
-
-        if borrow1 || borrow2 {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8)
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-
-    fn and(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let result = a & b;
-        self.registers.set_a(result);
-
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::C as u8);
-        f |= FLAGS::H as u8;
-
-        if result == 0 {
-            f |= FLAGS::Z as u8
-        } else {
-            f &= !(FLAGS::Z as u8)
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-    fn xor(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let result = a ^ b;
-        self.registers.set_a(result);
-
-        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-    fn or(&mut self, b: u8) {
-        let a = self.registers.get_a();
-        let result = a | b;
-        self.registers.set_a(result);
-
-        let mut f = self.registers.get_f() & !(FLAGS::C as u8 | FLAGS::N as u8 | FLAGS::H as u8);
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-
-    fn compare(&mut self, n8: u8) {
-        let a = self.registers.get_a();
-        let result = a.wrapping_sub(n8);
-
-        let mut f = self.registers.get_f() | FLAGS::N as u8;
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        if (a & 0x0F) < (n8 & 0x0F) {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        if a < n8 {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8);
-        }
-
-        self.registers.set_f(f);
-       self.nop();
-    }
-
-    fn reset(&mut self, address: u16) {
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.nop();
-        self.ram.borrow_mut().write(
-            self.registers.get_sp(),
-            (self.registers.get_pc() >> 8) as u8,
-        );
-        self.nop();
-        self.registers
-            .set_sp(self.registers.get_sp().wrapping_sub(1));
-        self.nop();
-        self.ram.borrow_mut().write(
-            self.registers.get_sp(),
-            (self.registers.get_pc() & 0xFF) as u8,
-        );
-
-        self.registers.set_pc(address);
-        self.nop();
-
-    }
-    fn rotate_without_carry(&mut self, mut value: u8, type_: u8) -> u8 {
-        self.nop();
-        let bool;
-        if type_ == 0 {
-            bool = (value & 0x80) != 0;
-            value = value.rotate_left(1);
-        } else {
-            bool = (value & 0x01) != 0;
-            value = value.rotate_right(1);
-        }
-
-        let mut f: u8 = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
-
-        if value == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8)
-        }
-
-        if bool {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8)
-        }
-
-        self.registers.set_f(f);
-        value
-    }
-
-    fn rotate(&mut self, mut value: u8, type_: u8) -> u8 {
-        self.nop();
-        let bool;
-        let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
-        if type_ == 0 {
-            bool = (value & 0x80) != 0;
-            value = (value << 1) | (carry as u8);
-        } else {
-            bool = (value & 0x01) != 0;
-            value = (value >> 1) | ((carry as u8) << 7);
-        }
-
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
-
-        if value == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8)
-        }
-
-        if bool {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8)
-        }
-
-        self.registers.set_f(f);
-
-        value
-    }
-
-    fn shift(&mut self, mut value: u8, type_: u8) -> u8 {
-        // Read the old flags, but we’re going to build the new flags from scratch.
-        self.nop();
-        let mut f: u8 = 0;
-
-        if type_ == 0 {
-            let msb = (value & 0x80) != 0;
-            value <<= 1;
-            if msb {
-                f |= FLAGS::C as u8;
-            }
-        } else {
-            let lsb = (value & 0x01) != 0;
-            let msb = value & 0x80;
-            value = (value >> 1) | msb;
-            if lsb {
-                f |= FLAGS::C as u8;
-            }
-        }
-
-        if value == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        self.registers.set_f(f);
-
-        value
-    }
-
-    fn swap(&mut self, value: u8) -> u8 {
-        self.nop();
-        let result = (value >> 4) | (value << 4);
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
-
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-        self.registers.set_f(f);
-        result
-    }
-    fn right_shift(&mut self, mut value: u8) -> u8 {
-        self.nop();
-
-        let lsb = (value & 0x01) != 0;
-        value >>= 1;
-
-        let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8);
-
-        if value == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-
-        if lsb {
-            f |= FLAGS::C as u8;
-        } else {
-            f &= !(FLAGS::C as u8);
-        }
-
-        self.registers.set_f(f);
-
-        value
-    }
-    fn bit(&mut self, value: u8, bit: u8) {
-        self.nop();
-        self.nop();
-        let tested_bit = value & (1 << bit);
-
-        let mut f = self.registers.get_f() | FLAGS::H as u8;
-        f &= !(FLAGS::N as u8);
-
-        if tested_bit == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        self.registers.set_f(f);
     }
 }

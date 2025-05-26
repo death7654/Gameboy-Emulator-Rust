@@ -8,6 +8,8 @@ pub struct RAM {
     pub oam: [u8; 0xA0],
     pub io: [u8; 0x80],
     pub interrupt_enable: u8,
+
+    pub div_written: bool,
 }
 
 impl RAM {
@@ -24,6 +26,8 @@ impl RAM {
             oam: [0; 0xA0],
             io: [0; 0x80],
             interrupt_enable: 0,
+
+            div_written: false,
         }
     }
     pub fn read(&self, address: u16) -> u8 {
@@ -81,6 +85,7 @@ impl RAM {
             0xFF04 => {
                 if let Some(slot) = self.io.get_mut((0x4) as usize) {
                     *slot = 0x00;
+                    self.div_written = true;
                 }
             }
             0xFF00..=0xFF7F => {
