@@ -17,6 +17,7 @@ impl Joypad {
 
     pub fn set_key(&mut self, key: Keycode, pressed: bool) {
         // For the D-Pad, we use WASD (W: Up, A: Left, S: Down, D: Right)
+        print!("");
         match key {
             Keycode::W => {
                 // Up corresponds to bit 2

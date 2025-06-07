@@ -28,10 +28,9 @@ Tests Passed
  */
 
 fn main() {
-    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    //let rom = std::fs::read("roms/tetris.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/interrupt_time/interrupt_time.gb").unwrap();
-    //let rom =
-    //     std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/mem_timing-2/mem_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
@@ -71,7 +70,7 @@ fn main() {
                 } => {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
-                        println!("Key {:?} pressed. Resuming CPU...", key);
+                        println!("",);
                     }
                     emulator.joypad.set_key(key, true);
                     let updated = emulator.joypad.read();
@@ -93,31 +92,31 @@ fn main() {
         }
 
         if emulator.cpu.stopped {
-            emulator.cpu.handle_interrupt();
+            emulator.cpu.handle_interrupt(&mut emulator.ppu);
 
-                emulator.cpu.nop();
+            emulator.cpu.nop(&mut emulator.ppu);
             continue 'gameloop;
         }
 
         if emulator.cpu.halted {
-            emulator.cpu.handle_interrupt();
+            emulator.cpu.handle_interrupt(&mut emulator.ppu);
 
             if emulator.cpu.halted {
-                emulator.cpu.nop();
+                emulator.cpu.nop(&mut emulator.ppu);
                 continue 'gameloop;
             }
         }
 
         let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
-            emulator.cpu.handle_interrupt();
+            emulator.cpu.handle_interrupt(&mut emulator.ppu);
             let opcode = emulator.cpu.fetch();
-            emulator.cpu.execute(opcode);
+            emulator.cpu.execute(opcode, &mut emulator.ppu);
         }
 
         // 4. Render the Video Output
-        emulator.gpu.render();
-        let fb = emulator.gpu.get_framebuffer();
+        emulator.ppu.render();
+        let fb = emulator.ppu.get_framebuffer();
         texture.update(None, fb, 160 * 3).unwrap();
         canvas.clear();
         canvas.copy(&texture, None, None).unwrap();

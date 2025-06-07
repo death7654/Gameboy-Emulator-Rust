@@ -32,6 +32,9 @@ pub struct GPU {
     /// 160×144 RGB framebuffer
     pub framebuffer: [u8; 160 * 144 * 3],
     pub ram: Rc<RefCell<RAM>>,
+    pub scanline: u8,
+    pub cycles: u32,
+    lcd_on: bool,
 }
 
 impl GPU {
@@ -39,6 +42,29 @@ impl GPU {
         Self {
             framebuffer: [0; 160 * 144 * 3],
             ram,
+            scanline: 0,
+            cycles: 0,
+            lcd_on: true,
+        }
+    }
+    pub fn step(&mut self) {
+        self.cycles += 4;
+        if self.cycles > 456 {
+            self.scanline = self.scanline.wrapping_add(1);
+            self.cycles -= 456;
+
+            let scanlines = self.scanline;
+
+            //only allow interrupt if lcd is on
+            if scanlines == 144 && self.lcd_on {
+                self.ram.borrow_mut().write(0xFF0F, 0b0000_0001);
+            }
+            //reset scanlines
+            else if scanlines >= 154 {
+                self.scanline = 0;
+            }
+            //writing to ram
+            self.ram.borrow_mut().write(0xFF44, self.scanline);
         }
     }
 
@@ -87,14 +113,10 @@ impl GPU {
 
         // Rendering code goes here.
     }
-    fn lcd_off(&mut self)
-    {
+    fn lcd_off(&mut self) {
         self.framebuffer = [255; 160 * 144 * 3];
     }
-    fn render_tile(x: i32, y: i32, bg_x: i32, bg_y: i32)
-    {
-        
-    }
+    fn render_tile(x: i32, y: i32, bg_x: i32, bg_y: i32) {}
 
     /// Expose framebuffer for display.
     pub fn get_framebuffer(&self) -> &[u8] {
