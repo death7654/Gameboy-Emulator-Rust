@@ -1,10 +1,11 @@
 use cpu::CPU;
 use input::Joypad;
-use ppu::GPU;
+use ppu::PPU;
 use ram::RAM;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
 
 pub(crate) mod cpu;
 pub(crate) mod input;
@@ -14,7 +15,7 @@ pub(crate) mod ram;
 
 pub struct EMULATOR {
     pub cpu: cpu::CPU,
-    pub ppu: ppu::GPU,
+    pub ppu: ppu::PPU,
     pub ram: Rc<RefCell<RAM>>,
     pub joypad: input::Joypad,
 }
@@ -24,7 +25,7 @@ impl EMULATOR {
         let shared_ram = Rc::new(RefCell::new(RAM::new(rom)));
 
         let cpu = CPU::new(shared_ram.clone());
-        let ppu = GPU::new(shared_ram.clone());
+        let ppu = PPU::new(shared_ram.clone());
 
         let emulator = EMULATOR {
             cpu,
@@ -36,8 +37,5 @@ impl EMULATOR {
         emulator.ram.borrow_mut().write(0xFF00, 0b11111111);
 
         emulator
-    }
-    pub fn tick_gpu(&mut self) {
-        self.ppu.step();
     }
 }

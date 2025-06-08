@@ -54,9 +54,9 @@ fn main() {
         .unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
 
-    //enable_test_pattern(&mut emulator.ram.borrow_mut());
+    //turn on LCD
+    emulator.ram.borrow_mut().write(0xFF40, 0b1000_0000);
 
-    //emulator.cpu.log_cpu_state();
 
     'gameloop: loop {
         // 1. Input Handling

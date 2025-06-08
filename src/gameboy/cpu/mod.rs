@@ -1,7 +1,7 @@
 mod registers;
 mod timer;
 
-use crate::gameboy::ppu::GPU;
+use crate::gameboy::ppu::PPU;
 use crate::gameboy::RAM;
 
 use registers::FLAGS;
@@ -95,7 +95,7 @@ impl CPU {
         value
     }
 
-    pub fn handle_interrupt(&mut self, ppu: &mut GPU) {
+    pub fn handle_interrupt(&mut self, ppu: &mut PPU) {
         if self.ime_queued {
             self.ime = true;
             self.ime_queued = false;
@@ -156,7 +156,7 @@ impl CPU {
         self.registers.set_pc(vector);
     }
 
-    fn halt_bug(&mut self, ppu: &mut GPU) {
+    fn halt_bug(&mut self, ppu: &mut PPU) {
         self.halted = false;
         let pc = self.registers.get_pc();
         let opcode = self.ram.borrow().read(pc);
@@ -177,7 +177,7 @@ impl CPU {
             .write(self.registers.get_sp(), (value & 0xFF) as u8);
     }
 
-    fn tick(&mut self, ppu: &mut GPU) {
+    fn tick(&mut self, ppu: &mut PPU) {
         self.timer.timer(4);
         ppu.step();
 
@@ -185,48 +185,48 @@ impl CPU {
             self.ime = true;
         }
     }
-    pub fn nop(&mut self, ppu: &mut GPU) {
+    pub fn nop(&mut self, ppu: &mut PPU) {
         self.tick(ppu);
     }
-    fn load_16(&mut self, address: u16, ppu: &mut GPU) -> u8 {
+    fn load_16(&mut self, address: u16, ppu: &mut PPU) -> u8 {
         let value = self.ram.borrow().read(address);
         self.nop(ppu);
         value
     }
-    fn load_a(&mut self, value: u8, ppu: &mut GPU) {
+    fn load_a(&mut self, value: u8, ppu: &mut PPU) {
         self.nop(ppu);
         self.registers.set_a(value);
     }
-    fn load_b(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_b(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_b(data);
         self.nop(ppu);
     }
-    fn load_c(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_c(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_c(data);
         self.nop(ppu);
     }
-    fn load_d(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_d(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_d(data);
         self.nop(ppu);
     }
-    fn load_e(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_e(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_e(data);
         self.nop(ppu);
     }
-    fn load_h(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_h(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_h(data);
         self.nop(ppu);
     }
-    fn load_l(&mut self, data: u8, ppu: &mut GPU) {
+    fn load_l(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_l(data);
         self.nop(ppu);
     }
-    fn store(&mut self, address: u16, data: u8, ppu: &mut GPU) {
+    fn store(&mut self, address: u16, data: u8, ppu: &mut PPU) {
         self.ram.borrow_mut().write(address, data);
         self.nop(ppu);
     }
 
-    fn daa(&mut self, ppu: &mut GPU) {
+    fn daa(&mut self, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let mut f = self.registers.get_f();
 
@@ -266,31 +266,31 @@ impl CPU {
         self.nop(ppu);
     }
 
-    fn increment_bc(&mut self, ppu: &mut GPU) {
+    fn increment_bc(&mut self, ppu: &mut PPU) {
         let bc = self.registers.get_bc();
         self.nop(ppu);
         self.registers.set_bc(bc.wrapping_add(1));
         self.nop(ppu);
     }
-    fn increment_de(&mut self, ppu: &mut GPU) {
+    fn increment_de(&mut self, ppu: &mut PPU) {
         let de = self.registers.get_de();
         self.nop(ppu);
         self.registers.set_de(de.wrapping_add(1));
         self.nop(ppu);
     }
-    fn increment_hl(&mut self, ppu: &mut GPU) {
+    fn increment_hl(&mut self, ppu: &mut PPU) {
         let hl = self.registers.get_hl();
         self.nop(ppu);
         self.registers.set_hl(hl.wrapping_add(1));
         self.nop(ppu);
     }
-    fn increment_sp(&mut self, ppu: &mut GPU) {
+    fn increment_sp(&mut self, ppu: &mut PPU) {
         let sp = self.registers.get_sp();
         self.nop(ppu);
         self.registers.set_sp(sp.wrapping_add(1));
         self.nop(ppu);
     }
-    fn rlca(&mut self, ppu: &mut GPU) {
+    fn rlca(&mut self, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (a & 0x80) != 0;
 
@@ -307,7 +307,7 @@ impl CPU {
         self.nop(ppu);
     }
 
-    fn add_16bit(&mut self, value1: u16, value2: u16, ppu: &mut GPU) -> u16 {
+    fn add_16bit(&mut self, value1: u16, value2: u16, ppu: &mut PPU) -> u16 {
         let result = value1.wrapping_add(value2);
 
         let mut f = self.registers.get_f();
@@ -332,7 +332,7 @@ impl CPU {
         self.nop(ppu);
         result
     }
-    fn increment_8_bit(&mut self, data: u8, ppu: &mut GPU) -> u8 {
+    fn increment_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
         let result = data.wrapping_add(1);
 
         let mut f = self.registers.get_f();
@@ -360,7 +360,7 @@ impl CPU {
         self.nop(ppu);
         result
     }
-    fn decrement_8_bit(&mut self, data: u8, ppu: &mut GPU) -> u8 {
+    fn decrement_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
         let result = data.wrapping_sub(1);
         let mut f = self.registers.get_f();
 
@@ -387,15 +387,15 @@ impl CPU {
         self.nop(ppu);
         result
     }
-    fn zero_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut GPU) -> u8 {
+    fn zero_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         value & !(1 << bit)
     }
-    fn set_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut GPU) -> u8 {
+    fn set_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         value | (1 << bit)
     }
-    fn add_8bit(&mut self, b: u8, ppu: &mut GPU) {
+    fn add_8bit(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let (result, carry) = a.overflowing_add(b); // Separate carry result
 
@@ -426,7 +426,7 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
-    fn add_with_carry(&mut self, b: u8, ppu: &mut GPU) {
+    fn add_with_carry(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
         let (result, carry1) = a.overflowing_add(b);
@@ -457,7 +457,7 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
-    fn sub_8bit(&mut self, b: u8, ppu: &mut GPU) {
+    fn sub_8bit(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let (result, borrow) = a.overflowing_sub(b);
 
@@ -480,7 +480,7 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
-    fn sub_with_carry(&mut self, b: u8, ppu: &mut GPU) {
+    fn sub_with_carry(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
 
@@ -513,7 +513,7 @@ impl CPU {
         self.nop(ppu);
     }
 
-    fn and(&mut self, b: u8, ppu: &mut GPU) {
+    fn and(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a & b;
         self.registers.set_a(result);
@@ -530,7 +530,7 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
-    fn xor(&mut self, b: u8, ppu: &mut GPU) {
+    fn xor(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a ^ b;
         self.registers.set_a(result);
@@ -546,7 +546,7 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
-    fn or(&mut self, b: u8, ppu: &mut GPU) {
+    fn or(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a | b;
         self.registers.set_a(result);
@@ -563,7 +563,7 @@ impl CPU {
         self.nop(ppu);
     }
 
-    fn compare(&mut self, n8: u8, ppu: &mut GPU) {
+    fn compare(&mut self, n8: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a.wrapping_sub(n8);
 
@@ -591,7 +591,7 @@ impl CPU {
         self.nop(ppu);
     }
 
-    fn reset(&mut self, address: u16, ppu: &mut GPU) {
+    fn reset(&mut self, address: u16, ppu: &mut PPU) {
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
         self.nop(ppu);
@@ -611,7 +611,7 @@ impl CPU {
         self.registers.set_pc(address);
         self.nop(ppu);
     }
-    fn rotate_without_carry(&mut self, mut value: u8, type_: u8, ppu: &mut GPU) -> u8 {
+    fn rotate_without_carry(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let bool;
         if type_ == 0 {
@@ -640,7 +640,7 @@ impl CPU {
         value
     }
 
-    fn rotate(&mut self, mut value: u8, type_: u8, ppu: &mut GPU) -> u8 {
+    fn rotate(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let bool;
         let carry = (self.registers.get_f() & FLAGS::C as u8) != 0;
@@ -671,7 +671,7 @@ impl CPU {
         value
     }
 
-    fn shift(&mut self, mut value: u8, type_: u8, ppu: &mut GPU) -> u8 {
+    fn shift(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         // Read the old flags, but we’re going to build the new flags from scratch.
         self.nop(ppu);
         let mut f: u8 = 0;
@@ -702,7 +702,7 @@ impl CPU {
         value
     }
 
-    fn swap(&mut self, value: u8, ppu: &mut GPU) -> u8 {
+    fn swap(&mut self, value: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let result = (value >> 4) | (value << 4);
         let mut f = self.registers.get_f() & !(FLAGS::N as u8 | FLAGS::H as u8 | FLAGS::C as u8);
@@ -715,7 +715,7 @@ impl CPU {
         self.registers.set_f(f);
         result
     }
-    fn right_shift(&mut self, mut value: u8, ppu: &mut GPU) -> u8 {
+    fn right_shift(&mut self, mut value: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
 
         let lsb = (value & 0x01) != 0;
@@ -739,7 +739,7 @@ impl CPU {
 
         value
     }
-    fn bit(&mut self, value: u8, bit: u8, ppu: &mut GPU) {
+    fn bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) {
         self.nop(ppu);
         self.nop(ppu);
         let tested_bit = value & (1 << bit);
@@ -756,7 +756,7 @@ impl CPU {
         self.registers.set_f(f);
     }
 
-    pub fn execute(&mut self, opcode: u8, ppu: &mut GPU) {
+    pub fn execute(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {
             0x00 => {
                 //NOP
@@ -2481,7 +2481,7 @@ impl CPU {
             }
         }
     }
-    fn cb(&mut self, opcode: u8, ppu: &mut GPU) {
+    fn cb(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {
             0x00 => {
                 let data = self.rotate_without_carry(self.registers.get_b(), 0, ppu);
