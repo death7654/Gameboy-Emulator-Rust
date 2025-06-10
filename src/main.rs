@@ -57,7 +57,6 @@ fn main() {
     //turn on LCD
     emulator.ram.borrow_mut().write(0xFF40, 0b1000_0000);
 
-
     'gameloop: loop {
         // 1. Input Handling
         for evt in event_pump.poll_iter() {

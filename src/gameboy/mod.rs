@@ -6,7 +6,6 @@ use ram::RAM;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
 pub(crate) mod cpu;
 pub(crate) mod input;
 pub(crate) mod lcd;

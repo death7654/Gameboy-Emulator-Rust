@@ -9,7 +9,12 @@ pub struct RAM {
     pub io: [u8; 0x80],
     pub interrupt_enable: u8,
 
+    //to reset the timer counter to zero if div is written to
     pub div_written: bool,
+    //to check if the tiles should be recalculated
+    pub vram_changed: bool,
+    //to check if the ppu is active
+    pub vram_blocked: bool,
 }
 
 impl RAM {
@@ -28,8 +33,12 @@ impl RAM {
             interrupt_enable: 0,
 
             div_written: false,
+            vram_changed: false,
+            vram_blocked: false,
         }
     }
+
+    //to read the ram's contents
     pub fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3FFF => self.rom[address as usize],
@@ -49,6 +58,7 @@ impl RAM {
         }
     }
 
+    //to handle writes to the ram
     pub fn write(&mut self, address: u16, value: u8) {
         //bllargs test output
         if address == 0xFF02 && value == 0x81 {
@@ -68,8 +78,13 @@ impl RAM {
 
             // Other memory writes remain unchanged
             0x8000..=0x9FFF => {
-                if let Some(slot) = self.vram.get_mut((address - 0x8000) as usize) {
-                    *slot = value;
+                //when the ppu is active the vram is blocked
+                if !self.vram_blocked {
+                    if let Some(slot) = self.vram.get_mut((address - 0x8000) as usize) {
+                        *slot = value;
+                        //vram changed to check if the vram has new data so the tiles can be recalculated
+                        self.vram_changed = true;
+                    }
                 }
             }
             0xC000..=0xDFFF => {
@@ -102,12 +117,15 @@ impl RAM {
             _ => {} // Ignore unmapped writes
         }
     }
+
+    //mainly used for blargs testing
     fn handle_serial_output(&self) {
         // Read the value from 0xFF01 (Serial Data Register)
-        let data = self.io[0x01]; // Offset 0x01 in the I/O range corresponds to 0xFF01
-        print!("{}", data as char); // Output as an ASCII character
+        let data = self.io[0x01];
+        print!("{}", data as char);
     }
 
+    //special div update function, only able to be accessed by the timer
     pub fn update_div(&mut self, new: u8) {
         if let Some(slot) = self.io.get_mut((0x4) as usize) {
             *slot = new;
