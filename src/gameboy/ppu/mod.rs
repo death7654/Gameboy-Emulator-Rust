@@ -16,8 +16,18 @@ const DMG_BG_PALETTE: [[u8; 3]; 4] = [
     [0, 0, 0],
 ];
 
+const DMG_SPRITE_PALETTE: [[u8; 3]; 4] = [
+    [0, 0, 0],       // Transparent (ignored)
+    [255, 255, 255], // White
+    [170, 170, 170], // Light gray
+    [85, 85, 85],    // Dark gray
+];
+
+//background tile map
 const BG_MAP_UNSIGNED: u16 = 0x9800;
 const BG_MAP_SIGNED: u16 = 0x9C00;
+
+//tile data
 const TILE_DATA_SIGNED: u16 = 0x8800;
 const TILE_DATA_UNSIGNED: u16 = 0x8000;
 
@@ -78,54 +88,72 @@ impl PPU {
     pub fn render(&mut self) {
         let lcd_control = self.ram.borrow().read(0xFF40);
 
+        //bit 7: lcd on or off indicator
         self.lcd_on = lcd_control & 0x80 != 0;
         if !self.lcd_on {
             return;
         }
 
+        //bit 6: where the tile maps are stored
         self.window_tile_map_area = if lcd_control & 0x40 != 0 {
             BG_MAP_SIGNED
         } else {
             BG_MAP_UNSIGNED
         };
 
+        //bit 5: enable windows
         self.window_enable = lcd_control & 0x20 != 0;
 
+        //bit 4: tile data area
         self.background_and_window_tile_area = if lcd_control & 0x10 != 0 {
             TILE_DATA_UNSIGNED
         } else {
             TILE_DATA_SIGNED
         };
 
+        //bit 3: background tile area
         self.background_tilemap_area = if lcd_control & 0x08 != 0 {
             BG_MAP_SIGNED
         } else {
             BG_MAP_UNSIGNED
         };
 
+        //bit 2: object size 8x8 or 8x16
         self.object_size = lcd_control & 0x04 != 0;
+
+        //bit 1: objected enabled?
         self.object_enabled = lcd_control & 0x02 != 0;
+
+        //bit 0: background and window enable priorty
         self.background_and_window_enable_priority = lcd_control & 0x01 != 0;
 
+        //regenerate tiles if the vram has been changed
         if self.ram.borrow().vram_changed {
             self.generate_tiles();
         }
 
+        //render tiles
         self.render_tiles();
     }
 
     fn generate_tiles(&mut self) {
+        // for the tile index
         for tile_index in 0..NUM_TILES {
-            let mut tile: Tile = [[255; 3]; 64];
-            let base = 0x8000 + (tile_index * 16) as u16;
+            //grab the current tile
+            let mut tile: Tile = self.tile_cache[tile_index];
+
+            let base = self.background_and_window_tile_area + (tile_index * 16) as u16;
             for y in 0..8 {
+                //grab 2 bytes
                 let byte1 = self.ram.borrow().read(base + y * 2);
                 let byte2 = self.ram.borrow().read(base + y * 2 + 1);
+
                 for x in 0..8 {
                     let bit = 7 - x;
                     let lo = (byte1 >> bit) & 1;
                     let hi = (byte2 >> bit) & 1;
                     let color = (hi << 1) | lo;
+                    //calculate colors
                     tile[(y * 8) as usize + x] = DMG_BG_PALETTE[color as usize];
                 }
             }
