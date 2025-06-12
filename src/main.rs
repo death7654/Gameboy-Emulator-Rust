@@ -28,8 +28,8 @@ Tests Passed
  */
 
 fn main() {
-    //let rom = std::fs::read("roms/pred.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/dmg-acid2/dmg-acid2.gb").unwrap();
+    let rom = std::fs::read("roms/pred.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/dmg-acid2/dmg-acid2.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/mem_timing-2/mem_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();

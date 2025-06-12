@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use sdl2::libc::EILSEQ;
+
 use super::ram::RAM;
 
 const WIDTH: u32 = 160;
@@ -9,12 +11,7 @@ const HEIGHT: u32 = 144;
 const NUM_TILES: usize = 384;
 type Tile = [[u8; 3]; 64];
 
-const DMG_BG_PALETTE: [[u8; 3]; 4] = [
-    [255, 255, 255],
-    [170, 170, 170],
-    [85, 85, 85],
-    [0, 0, 0],
-];
+const DMG_BG_PALETTE: [[u8; 3]; 4] = [[255, 255, 255], [170, 170, 170], [85, 85, 85], [0, 0, 0]];
 
 const DMG_SPRITE_PALETTE: [[u8; 3]; 4] = [
     [0, 0, 0],       // Transparent (ignored)
@@ -131,41 +128,51 @@ impl PPU {
         if self.ram.borrow().vram_changed {
             self.generate_tiles();
         }
-
         //render tiles
         self.render_tiles();
     }
 
     fn generate_tiles(&mut self) {
-        // for the tile index
+        //generate tiles for the maximum number of tiles
         for tile_index in 0..NUM_TILES {
-            //grab the current tile
+            //identify the base depending on if the background bit is using signed data or unsigned data
+            let base = if self.background_and_window_tile_area == TILE_DATA_SIGNED {
+                // treat as signed index from -128 to 127
+                let signed_index = tile_index as i8 as i16;
+                (0x9000u16 as i16 + signed_index * 16) as u16
+            } else {
+                0x8000 + (tile_index * 16) as u16
+            };
+
+
+            //get the current tile stored at the current index
             let mut tile: Tile = self.tile_cache[tile_index];
 
-            let base = self.background_and_window_tile_area + (tile_index * 16) as u16;
             for y in 0..8 {
-                //grab 2 bytes
                 let byte1 = self.ram.borrow().read(base + y * 2);
                 let byte2 = self.ram.borrow().read(base + y * 2 + 1);
 
+                //calculate colors
                 for x in 0..8 {
                     let bit = 7 - x;
                     let lo = (byte1 >> bit) & 1;
                     let hi = (byte2 >> bit) & 1;
                     let color = (hi << 1) | lo;
-                    //calculate colors
                     tile[(y * 8) as usize + x] = DMG_BG_PALETTE[color as usize];
                 }
             }
+
             self.tile_cache[tile_index] = tile;
         }
     }
 
     fn render_tiles(&mut self) {
+        //figure out the offset
         let scy = self.ram.borrow().read(0xFF42) as usize;
         let scx = self.ram.borrow().read(0xFF43) as usize;
 
         for y in 0..HEIGHT as usize {
+            //gameboy uses wrapping display viewports
             let map_y = (scy + y) % 256;
             let tile_row = map_y / 8;
             let pixel_y = map_y % 8;
@@ -175,11 +182,12 @@ impl PPU {
                 let tile_col = map_x / 8;
                 let pixel_x = map_x % 8;
 
-                let tile_index_addr = self.background_tilemap_area + (tile_row * 32 + tile_col) as u16;
+                let tile_index_addr =
+                    self.background_tilemap_area + (tile_row * 32 + tile_col) as u16;
                 let mut tile_index = self.ram.borrow().read(tile_index_addr);
 
                 if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
-                    tile_index = tile_index.wrapping_add(255);
+                    tile_index = tile_index.wrapping_add(255).wrapping_add(1);
                 }
 
                 let color = self.tile_cache[tile_index as usize][pixel_y * 8 + pixel_x];
