@@ -134,24 +134,25 @@ impl CPU {
                     self.timer.tima_overflowed = false;
                 }
                 if (pending & (1 << bit)) != 0 {
-                    self.service_interrupt(bit, vector);
+                    self.service_interrupt(bit, vector, ppu);
                     break;
                 }
             }
         }
     }
 
-    fn service_interrupt(&mut self, bit: u8, vector: u16) {
+    fn service_interrupt(&mut self, bit: u8, vector: u16, ppu: &mut PPU) {
         self.halted = false;
         self.ime = false;
 
-        self.cycles += 8;
 
         self.push_pc();
 
         let mut iflag = self.ram.borrow().read(0xFF0F);
+        self.nop(ppu);
         iflag &= !(1 << bit);
         self.ram.borrow_mut().write(0xFF0F, iflag);
+        self.nop(ppu);
 
         self.registers.set_pc(vector);
     }
@@ -180,12 +181,16 @@ impl CPU {
     fn tick(&mut self, ppu: &mut PPU) {
         self.timer.timer(4);
         ppu.step();
+        if (self.ram.borrow().oma_dma) {
+            self.ram.borrow_mut().oam_dma_transfer();
+        }
 
         if self.ime_queued {
             self.ime = true;
         }
     }
     pub fn nop(&mut self, ppu: &mut PPU) {
+        self.cycles+=4;
         self.tick(ppu);
     }
     fn load_16(&mut self, address: u16, ppu: &mut PPU) -> u8 {
@@ -2004,7 +2009,6 @@ impl CPU {
 
                     self.registers.set_pc(address);
 
-                    self.cycles += 24;
                 } else {
                     self.nop(ppu);
                 }

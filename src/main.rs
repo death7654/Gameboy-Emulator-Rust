@@ -30,12 +30,11 @@ Tests Passed
 fn main() {
     let rom = std::fs::read("roms/pred.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/dmg-acid2/dmg-acid2.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg/cpu_instrs/cpu_instrs.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg/mem_timing-2/mem_timing.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/bully/bully.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/manual-only/sprite_priority.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
 
-    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim00.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/mooneye/acceptance/timer/tima_write_reloading.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
 
@@ -69,8 +68,8 @@ fn main() {
                 } => {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
-                        println!("",);
                     }
+                    println!("pressed",);
                     emulator.joypad.set_key(key, true);
                     let updated = emulator.joypad.read();
                     emulator.ram.borrow_mut().write(0xFF00, updated);
@@ -106,11 +105,15 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 60;
+        let instructions_per_frame: u32 = CPU_CLOCK / 30;
         for _ in 0..instructions_per_frame {
-            emulator.cpu.handle_interrupt(&mut emulator.ppu);
-            let opcode = emulator.cpu.fetch();
-            emulator.cpu.execute(opcode, &mut emulator.ppu);
+            if !emulator.ram.borrow().oma_dma {
+                emulator.cpu.handle_interrupt(&mut emulator.ppu);
+                let opcode = emulator.cpu.fetch();
+                emulator.cpu.execute(opcode, &mut emulator.ppu);
+            } else {
+                emulator.cpu.nop(&mut emulator.ppu);
+            }
         }
 
         // 4. Render the Video Output

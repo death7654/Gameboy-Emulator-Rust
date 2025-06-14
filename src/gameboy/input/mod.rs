@@ -11,13 +11,13 @@ impl Joypad {
         Self {
             dpad: 0x0F,
             buttons: 0x0F,
-            reg: 0xFF,
+            reg: 0xCF,
         }
     }
 
     pub fn set_key(&mut self, key: Keycode, pressed: bool) {
         // For the D-Pad, we use WASD (W: Up, A: Left, S: Down, D: Right)
-        print!("");
+        print!("{}", key);
         match key {
             Keycode::W => {
                 // Up corresponds to bit 2
