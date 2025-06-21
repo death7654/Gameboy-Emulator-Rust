@@ -15,6 +15,7 @@ pub struct RAM {
     pub vram_changed: bool,
     //to check if the ppu is active
     pub vram_blocked: bool,
+    pub oma_blocked: bool,
     // to check if oma dma transfer
     pub oma_dma: bool,
     pub oma_cycles: u16,
@@ -40,6 +41,7 @@ impl RAM {
             vram_changed: false,
             vram_blocked: false,
             oma_dma: false,
+            oma_blocked: false,
             oma_cycles: 0,
             oma_source: 0,
         }
@@ -67,7 +69,7 @@ impl RAM {
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
             0xE000..=0xFDFF => self.wram[(address - 0xE000) as usize],
             0xFE00..=0xFE9F => {
-                if self.oma_dma {
+                if self.oma_dma || self.oma_blocked {
                     0xFF // block CPU reads from OAM during DMA
                 } else {
                     self.oma[(address - 0xFE00) as usize]
@@ -118,8 +120,10 @@ impl RAM {
                 }
             }
             0xFE00..=0xFE9F => {
-                if let Some(slot) = self.oma.get_mut((address - 0xFE00) as usize) {
-                    *slot = value;
+                if !self.oma_blocked {
+                    if let Some(slot) = self.oma.get_mut((address - 0xFE00) as usize) {
+                        *slot = value;
+                    }
                 }
             }
             0xFF04 => {
@@ -175,7 +179,7 @@ impl RAM {
             _ => 0x00,
         }
     }
-    fn write_during_dma(&mut self, address: u16, value: u8) {
+    pub fn write_during_dma(&mut self, address: u16, value: u8) {
         match address {
             // ROM Bank Switching
             0x2000..=0x3FFF => self.rom_bank = (value & 0x1F) as usize,

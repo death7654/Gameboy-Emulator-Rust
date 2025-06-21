@@ -145,7 +145,6 @@ impl CPU {
         self.halted = false;
         self.ime = false;
 
-
         self.push_pc();
 
         let mut iflag = self.ram.borrow().read(0xFF0F);
@@ -190,7 +189,7 @@ impl CPU {
         }
     }
     pub fn nop(&mut self, ppu: &mut PPU) {
-        self.cycles+=4;
+        self.cycles += 4;
         self.tick(ppu);
     }
     fn load_16(&mut self, address: u16, ppu: &mut PPU) -> u8 {
@@ -2008,7 +2007,6 @@ impl CPU {
                     );
 
                     self.registers.set_pc(address);
-
                 } else {
                     self.nop(ppu);
                 }

@@ -21,13 +21,18 @@ const BG_MAP_SIGNED: u16 = 0x9C00;
 const TILE_DATA_SIGNED: u16 = 0x8800;
 const TILE_DATA_UNSIGNED: u16 = 0x8000;
 
+//ppu modes
+const MODE2_CYCLES: u32 = 80;
+const MODE3_CYCLES: u32 = 172;
+const MODE0_CYCLES: u32 = 204;
+const SCANLINE_CYCLES: u32 = MODE2_CYCLES + MODE3_CYCLES + MODE0_CYCLES;
+
 pub struct PPU {
     pub framebuffer: [u8; 160 * 144 * 3],
     pub ram: Rc<RefCell<RAM>>,
     pub scanline: u8,
-    pub cycles: u32,
-    tile_cache: [Tile; NUM_TILES],
-
+    pub scanline_cycle: u32,
+    tile_cache: Vec<Tile>,
     lcd_on: bool,
     window_tile_map_area: u16,
     window_enable: bool,
@@ -36,17 +41,22 @@ pub struct PPU {
     object_size: bool,
     object_enabled: bool,
     background_and_window_enable_priority: bool,
+
+    mode: u8,
 }
 
 impl PPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
-        let tile: Tile = [[255; 3]; 64];
+        let empty_tile = [[255u8; 3]; 8 * 8];
+        let tile_cache = vec![empty_tile; NUM_TILES];
+
+        ram.borrow_mut().write(0xFF44, 0);
         Self {
             framebuffer: [0; 160 * 144 * 3],
             ram,
             scanline: 0,
-            cycles: 0,
-            tile_cache: [tile; NUM_TILES],
+            scanline_cycle: 0,
+            tile_cache,
 
             lcd_on: true,
             window_tile_map_area: 0,
@@ -56,22 +66,130 @@ impl PPU {
             object_size: false,
             object_enabled: false,
             background_and_window_enable_priority: false,
+
+            mode: 2,
         }
     }
 
     pub fn step(&mut self) {
-        self.cycles += 4;
-        if self.cycles > 456 {
-            self.scanline = self.scanline.wrapping_add(1);
-            self.cycles -= 456;
+        // Add 4 T-cycles
+        self.scanline_cycle += 4;
 
+        // If we've reached or exceeded 456 cycles, we advance one scanline
+        if self.scanline_cycle >= SCANLINE_CYCLES {
+            // Render the scanline we just finished, if it's in visible range
+            // Note: we render at the start of Mode 3 on that scanline; here, since we detect crossing the previous scanline's end,
+            // it's equivalent to rendering when the next scanline begins Mode 3. To match earlier logic, we can render the line
+            // whose LY is still <144 before incrementing LY.
+            if self.scanline < 144 && self.lcd_on {
+                // Render the current scanline before incrementing LY
+                self.render_scanline(self.scanline as u16);
+            }
+
+            // Advance LY
+            self.scanline = self.scanline.wrapping_add(1);
+            self.scanline_cycle -= SCANLINE_CYCLES;
+
+            // On entering VBlank at LY == 144, request VBlank interrupt
             if self.scanline == 144 && self.lcd_on {
-                self.ram.borrow_mut().write(0xFF0F, 0b0000_0001);
-            } else if self.scanline >= 154 {
+                let mut ram = self.ram.borrow_mut();
+                let curr_if = ram.read(0xFF0F);
+                ram.write(0xFF0F, curr_if | 0x01);
+            }
+            // Wrap from 153→0
+            else if self.scanline > 153 {
                 self.scanline = 0;
             }
 
+            // Write LY register
             self.ram.borrow_mut().write(0xFF44, self.scanline);
+
+            // Determine new mode based on new scanline and remaining scanline_cycle
+            let previous_mode = self.mode;
+            let new_mode = if self.scanline >= 144 {
+                // VBlank period
+                1
+            } else {
+                // Visible scanlines 0..143
+                if self.scanline_cycle < MODE2_CYCLES {
+                    // Mode 2: OAM search
+                    // Block OAM, allow VRAM
+                    let mut ram = self.ram.borrow_mut();
+                    ram.vram_blocked = false;
+                    ram.oma_blocked = true;
+                    2
+                } else if self.scanline_cycle < MODE2_CYCLES + MODE3_CYCLES {
+                    // Mode 3: Pixel transfer
+                    // Block both VRAM and OAM
+                    let mut ram = self.ram.borrow_mut();
+                    ram.vram_blocked = true;
+                    ram.oma_blocked = true;
+                    3
+                } else {
+                    // Mode 0: HBlank
+                    // Allow both VRAM and OAM
+                    let mut ram = self.ram.borrow_mut();
+                    ram.vram_blocked = false;
+                    ram.oma_blocked = false;
+                    0
+                }
+            };
+
+            if new_mode != previous_mode {
+                self.mode = new_mode;
+                self.on_mode_change(); // handle STAT interrupts if needed
+            }
+
+            // If entering Mode 3 on a visible scanline, render that scanline now.
+            // With fixed 4-cycle increments, Mode 3 starts when scanline_cycle crosses MODE2_CYCLES.
+            // But since we only check at scanline boundary here, we also render at the start of the next scanline's Mode 3:
+            if self.mode == 3 && self.scanline < 144 && self.lcd_on {
+                // render the newly entered scanline at Mode 3 start
+                self.render_scanline(self.scanline as u16);
+            }
+        } else {
+            // Within the same scanline: possibly cross mode boundaries inside a scanline if needed.
+            // Since we're adding 4 each time, we may cross from Mode 2→3 or 3→0 within the same scanline.
+            // So we should also detect mode transitions within a scanline:
+            let previous_mode = self.mode;
+            let new_mode = if self.scanline >= 144 {
+                1
+            } else if self.scanline_cycle < MODE2_CYCLES {
+                2
+            } else if self.scanline_cycle < MODE2_CYCLES + MODE3_CYCLES {
+                3
+            } else {
+                0
+            };
+            if new_mode != previous_mode {
+                self.mode = new_mode;
+                self.on_mode_change();
+
+                // If we just entered Mode 3 mid-scanline, render that scanline now:
+                if new_mode == 3 && self.scanline < 144 && self.lcd_on {
+                    self.render_scanline(self.scanline as u16);
+                }
+            }
+        }
+    }
+    fn on_mode_change(&mut self) {
+        let mut ram = self.ram.borrow_mut();
+        // Update STAT mode bits 0-1, preserving coincidence bit (bit 2)
+        let mut stat = ram.read(0xFF41) & 0xF8;
+        stat |= self.mode & 0x03;
+        ram.write(0xFF41, stat);
+
+        // STAT interrupts: check bits 5,4,3 for modes 2,1,0 respectively
+        let stat = ram.read(0xFF41);
+        let request_stat = match self.mode {
+            2 => (stat & (1 << 5)) != 0,
+            1 => (stat & (1 << 4)) != 0,
+            0 => (stat & (1 << 3)) != 0,
+            _ => false,
+        };
+        if request_stat {
+            let curr_if = ram.read(0xFF0F);
+            ram.write(0xFF0F, curr_if | 0x02);
         }
     }
 
@@ -121,8 +239,6 @@ impl PPU {
         if self.ram.borrow().vram_changed {
             self.generate_tiles();
         }
-        //render tiles
-        self.render_tiles();
 
         //render objects
         if self.object_enabled {
@@ -163,33 +279,33 @@ impl PPU {
         }
     }
 
-    fn render_tiles(&mut self) {
+    fn render_scanline(&mut self, y: u16) {
         // figure out the offset
-        let scy = self.ram.borrow().read(0xFF42) as usize;
-        let scx = self.ram.borrow().read(0xFF43) as usize;
+        let scy = self.ram.borrow().read(0xFF42) as u16;
+        let scx = self.ram.borrow().read(0xFF43);
 
-        for y in 0..HEIGHT as usize {
-            // gameboy uses wrapping display viewports
-            let map_y = (scy + y) % 256;
-            let tile_row = map_y / 8;
-            let pixel_y = map_y % 8;
+        // gameboy uses wrapping display viewports
+        let map_y = (scy + y) % 256;
+        let tile_row = map_y / 8;
+        let pixel_y = map_y % 8;
 
-            for x in 0..WIDTH as usize {
-                let map_x = (scx + x) % 256;
-                let tile_col = map_x / 8;
-                let pixel_x = map_x % 8;
+        for x in 0..WIDTH as u16 {
+            let map_x = ((scx as u16 + x as u16) % 256);
+            let tile_col = (map_x / 8);
+            let pixel_x = (map_x % 8);
 
-                let tile_index_addr =
-                    self.background_tilemap_area + (tile_row * 32 + tile_col) as u16;
-                let mut tile_index = self.ram.borrow().read(tile_index_addr);
+            let tile_index_addr = self.background_tilemap_area + tile_row * 32 + tile_col as u16;
+            let mut tile_index = self.ram.borrow().read(tile_index_addr);
 
-                if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
-                    //if using the signed version add 256
-                    tile_index = tile_index.wrapping_add(255).wrapping_add(1);
-                }
+            if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
+                //if using the signed version add 256
+                tile_index = tile_index.wrapping_add(255).wrapping_add(1);
+            }
 
-                let color = self.tile_cache[tile_index as usize][pixel_y * 8 + pixel_x];
-                let i = (y * 160 + x) * 3;
+            let color =
+                self.tile_cache[tile_index as usize][(pixel_y * 8) as usize + pixel_x as usize];
+            let i = ((y * 160) as usize + x as usize) * 3;
+            if i + 2 < self.framebuffer.len() {
                 self.framebuffer[i] = color[0];
                 self.framebuffer[i + 1] = color[1];
                 self.framebuffer[i + 2] = color[2];
