@@ -130,9 +130,6 @@ impl CPU {
                 (3, 0x0058), // Serial
                 (4, 0x0060), // Joypad
             ] {
-                if bit == 2 {
-                    self.timer.tima_overflowed = false;
-                }
                 if (pending & (1 << bit)) != 0 {
                     self.service_interrupt(bit, vector, ppu);
                     break;
@@ -180,7 +177,8 @@ impl CPU {
     fn tick(&mut self, ppu: &mut PPU) {
         self.timer.timer(4);
         ppu.step();
-        if (self.ram.borrow().oma_dma) {
+        if self.ram.borrow().oma_dma {
+            self.ime = false;
             self.ram.borrow_mut().oam_dma_transfer();
         }
 

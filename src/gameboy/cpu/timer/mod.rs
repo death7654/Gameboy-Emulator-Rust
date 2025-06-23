@@ -22,7 +22,8 @@ impl Timer {
             ram,
         }
     }
-    pub fn timer(&mut self, osc_cycles: u16) {
+    pub fn timer(&mut self, mut osc_cycles: u16) {
+        osc_cycles = osc_cycles/4;
         if self.ram.borrow().div_written {
             self.div_counter = 0;
             self.ram.borrow_mut().div_written = false;
@@ -32,11 +33,10 @@ impl Timer {
 
         self.ram
             .borrow_mut()
-            .update_div((self.div_counter >> 7) as u8);
+            .update_div((self.div_counter >> 8) as u8);
 
         if self.timer_overflow_delay {
             self.timer_overflow_delay = false;
-            return;
         } else if self.tima_overflowed {
             let ff06 = self.ram.borrow().read(0xFF06);
             self.ram.borrow_mut().write(0xFF05, ff06);

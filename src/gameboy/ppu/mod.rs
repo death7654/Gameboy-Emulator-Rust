@@ -74,13 +74,7 @@ impl PPU {
     pub fn step(&mut self) {
         // Add 4 T-cycles
         self.scanline_cycle += 4;
-
-        // If we've reached or exceeded 456 cycles, we advance one scanline
         if self.scanline_cycle >= SCANLINE_CYCLES {
-            // Render the scanline we just finished, if it's in visible range
-            // Note: we render at the start of Mode 3 on that scanline; here, since we detect crossing the previous scanline's end,
-            // it's equivalent to rendering when the next scanline begins Mode 3. To match earlier logic, we can render the line
-            // whose LY is still <144 before incrementing LY.
             if self.scanline < 144 && self.lcd_on {
                 // Render the current scanline before incrementing LY
                 self.render_scanline(self.scanline as u16);

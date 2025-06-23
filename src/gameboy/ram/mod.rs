@@ -171,7 +171,7 @@ impl RAM {
             }
             0xA000..=0xBFFF => self.eram[(address - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
-            0xE000..=0xFDFF => self.wram[(address - 0xE000) as usize],
+            0xE000..=0xFDFF => self.eram[(address - 0xE000) as usize],
             0xFE00..=0xFE9F => self.oma[(address - 0xFE00) as usize],
             0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],

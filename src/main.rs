@@ -12,24 +12,9 @@ const HEIGHT: u32 = 144;
 
 const CPU_CLOCK: u32 = 4194304;
 
-/*
-Tests Passed
-01-special.gb
-03-op sp,hl.gb
-04-op r,imm.gb
-05-op rp.gb
-06-ld r,r.gb
-07-jr,jp,call,ret,rst.gb
-08-misc instrs.gb
-09-op r,r.gb
-10-bit ops.gb
-11-op a,(hl).gb
-
- */
-
 fn main() {
-    let rom = std::fs::read("roms/pred.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/dmg-acid2/dmg-acid2.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/bully/bully.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/manual-only/sprite_priority.gb").unwrap();
     //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
