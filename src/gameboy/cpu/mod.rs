@@ -113,7 +113,7 @@ impl CPU {
             return;
         }
 
-        // 3) HALT-bug: IME=0 + pending → exit HALT but do *not* service
+        // 3) HALT-bug: IME=0 + pending exit HALT but do *not* service
         if !self.ime && self.halted {
             self.halt_bug(ppu);
             return;

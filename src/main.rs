@@ -13,13 +13,8 @@ const HEIGHT: u32 = 144;
 const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
-    //let rom = std::fs::read("roms/tetris.gb").unwrap();
-    let rom = std::fs::read("roms/test_roms/blargg/instr_timing/instr_timing.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/bully/bully.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/manual-only/sprite_priority.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/blargg/oam_bug/oam_bug.gb").unwrap();
-
-    //let rom = std::fs::read("roms/test_roms/mooneye-test-suite/acceptance/timer/tim11.gb").unwrap();
+    let rom = std::fs::read("roms/drmario.gb").unwrap();
+    //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
 
     let mut emulator = EMULATOR::new(rom);
 
