@@ -1,40 +1,31 @@
 mod gameboy;
 
-use gameboy::lcd;
 use gameboy::EMULATOR;
 
-use sdl2;
-use sdl2::event::Event;
-use sdl2::pixels::PixelFormatEnum;
+use sdl2::{event::Event, pixels::PixelFormatEnum};
 
+
+// width of a gameboy screen
 const WIDTH: u32 = 160;
+
+// height of a gameboy screen
 const HEIGHT: u32 = 144;
 
+// gameboy clock speed in normal mode
 const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
-    let rom = std::fs::read("roms/drmario.gb").unwrap();
-    //let rom = std::fs::read("roms/test_roms/test_cart.gb").unwrap();
+    // read a rom file relative to the location of the root directory
+    let rom = std::fs::read("roms/pred.gb").unwrap();
 
+    // create a new emulator object and load in rom, it must be mutable 
     let mut emulator = EMULATOR::new(rom);
 
-    //intialize window
-    let (sdl, mut canvas) = match lcd::new() {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("Failed to initialize SDL2: {}", e);
-            return;
-        }
-    };
-    let texture_creator = canvas.texture_creator();
-
-    let mut texture = texture_creator
+    let mut texture = emulator.display.texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, WIDTH, HEIGHT)
         .unwrap();
-    let mut event_pump = sdl.event_pump().unwrap();
 
-    //turn on LCD
-    emulator.ram.borrow_mut().write(0xFF40, 0b1000_0000);
+    let mut event_pump = emulator.display.sdl.event_pump().unwrap();
 
     'gameloop: loop {
         // 1. Input Handling
@@ -49,9 +40,9 @@ fn main() {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
                     }
-                    println!("pressed",);
-                    emulator.joypad.set_key(key, true);
-                    let updated = emulator.joypad.read();
+                    emulator.input.set_key(key, true);
+                    let updated = emulator.input.read();
+                    println!("{}", updated);
                     emulator.ram.borrow_mut().write(0xFF00, updated);
 
                     let mut if_reg = emulator.ram.borrow().read(0xFF0F);
@@ -61,8 +52,8 @@ fn main() {
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
-                    emulator.joypad.set_key(key, false);
-                    let updated = emulator.joypad.read();
+                    emulator.input.set_key(key, false);
+                    let updated = emulator.input.read();
                     emulator.ram.borrow_mut().write(0xFF00, updated);
                 }
                 _ => {}
@@ -98,11 +89,13 @@ fn main() {
 
         // 4. Render the Video Output
         emulator.ppu.render();
+
         let fb = emulator.ppu.get_framebuffer();
         texture.update(None, fb, 160 * 3).unwrap();
-        canvas.clear();
-        canvas.copy(&texture, None, None).unwrap();
-        canvas.present();
+        emulator.display.canvas.clear();
+        emulator.display.canvas.copy(&texture, None, None).unwrap();
+        emulator.display.canvas.present();
+        
     }
 
     //println!("Game loop exited.");
