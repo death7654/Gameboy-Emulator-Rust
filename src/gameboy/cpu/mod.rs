@@ -122,6 +122,7 @@ impl CPU {
 
         // gets the saved state from the stack and moves it onto pc
         self.registers.set_pc(vector);
+        self.nop(ppu);
     }
 
     fn halt_bug(&mut self, ppu: &mut PPU) {
@@ -353,7 +354,7 @@ impl CPU {
         self.nop(ppu);
         result
     }
-    
+
     fn add_with_carry(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
@@ -571,7 +572,7 @@ impl CPU {
         self.nop(ppu);
     }
 
-    // compares two numbers and sets it accordingly 
+    // compares two numbers and sets it accordingly
     fn compare(&mut self, n8: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a.wrapping_sub(n8);
@@ -2498,7 +2499,7 @@ impl CPU {
             }
         }
     }
-    
+
     // special instruction jumped to from 0xCB
     fn cb(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {

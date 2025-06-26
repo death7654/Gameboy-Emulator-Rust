@@ -31,14 +31,9 @@ impl Display {
             .unwrap();
 
         //creates a canvas
-        let canvas = window
-            .into_canvas()
-            .present_vsync()
-            .build()
-            .unwrap();
+        let canvas = window.into_canvas().present_vsync().build().unwrap();
 
         let texture_creator = canvas.texture_creator();
-        
 
         Self {
             canvas,
@@ -46,5 +41,4 @@ impl Display {
             texture_creator,
         }
     }
-   
 }

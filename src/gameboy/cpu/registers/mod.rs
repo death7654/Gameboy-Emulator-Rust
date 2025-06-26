@@ -45,7 +45,6 @@ impl REGISTERS {
         self.a = value;
     }
 
-
     pub fn get_b(&self) -> u8 {
         self.b
     }
@@ -120,22 +119,21 @@ impl REGISTERS {
 
     //since b, c, d, e, h, l can act as one 16 bit instuction we need to add code for that
     pub fn get_bc(&self) -> u16 {
-        compute_16bit_reg(self.get_b(),self.get_c())
+        compute_16bit_reg(self.get_b(), self.get_c())
     }
     pub fn set_bc(&mut self, value: u16) {
         self.b = (value >> 8) as u8;
         self.c = value as u8;
     }
     pub fn get_de(&self) -> u16 {
-        compute_16bit_reg(self.get_d(),self.get_e())
-
+        compute_16bit_reg(self.get_d(), self.get_e())
     }
     pub fn set_de(&mut self, value: u16) {
         self.d = (value >> 8) as u8;
         self.e = value as u8;
     }
     pub fn get_hl(&self) -> u16 {
-        compute_16bit_reg(self.get_h(),self.get_l())
+        compute_16bit_reg(self.get_h(), self.get_l())
     }
     pub fn set_hl(&mut self, value: u16) {
         self.h = (value >> 8) as u8;
@@ -153,13 +151,10 @@ impl REGISTERS {
         self.set_pc(ret_pc.wrapping_add(1));
         ret_pc
     }
-
-  
 }
 
 // helper functions
 // computes the 16 bit value of 2 8-bit registers
-fn compute_16bit_reg(reg1: u8, reg2: u8) -> u16
-{
-    return ((reg1 as u16)<<8) | (reg2 as u16);
+fn compute_16bit_reg(reg1: u8, reg2: u8) -> u16 {
+    return ((reg1 as u16) << 8) | (reg2 as u16);
 }

@@ -1,20 +1,19 @@
+use apu::Audio;
 use cpu::CPU;
+use display::Display;
 use input::Joypad;
 use ppu::PPU;
 use ram::RAM;
-use apu::Audio;
-use display::Display;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
+pub(crate) mod apu;
 pub(crate) mod cpu;
+pub(crate) mod display;
 pub(crate) mod input;
 pub(crate) mod ppu;
 pub(crate) mod ram;
-pub(crate) mod apu;
-pub(crate) mod display;
 
 pub struct EMULATOR {
     pub cpu: cpu::CPU,
@@ -27,9 +26,8 @@ pub struct EMULATOR {
 
 impl EMULATOR {
     pub fn new(rom: Vec<u8>) -> Self {
-        let input= Joypad::new();
+        let input = Joypad::new();
         let shared_ram = Rc::new(RefCell::new(RAM::new(rom, input.clone())));
-
 
         let cpu = CPU::new(shared_ram.clone());
         let ppu = PPU::new(shared_ram.clone());
@@ -42,9 +40,8 @@ impl EMULATOR {
             ram: shared_ram,
             input,
             apu,
-            display
+            display,
         };
-
 
         emulator
     }

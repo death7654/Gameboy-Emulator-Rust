@@ -87,7 +87,6 @@ impl Joypad {
             }
             _ => {}
         }
-
     }
 
     pub fn read(&self) -> u8 {

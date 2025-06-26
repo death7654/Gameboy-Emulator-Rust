@@ -140,17 +140,11 @@ impl PPU {
                 self.on_mode_change(); // handle STAT interrupts if needed
             }
 
-            // If entering Mode 3 on a visible scanline, render that scanline now.
-            // With fixed 4-cycle increments, Mode 3 starts when scanline_cycle crosses MODE2_CYCLES.
-            // But since we only check at scanline boundary here, we also render at the start of the next scanline's Mode 3:
+           
             if self.mode == 3 && self.scanline < 144 && self.lcd_on {
-                // render the newly entered scanline at Mode 3 start
                 self.render_scanline(self.scanline as u16);
             }
         } else {
-            // Within the same scanline: possibly cross mode boundaries inside a scanline if needed.
-            // Since we're adding 4 each time, we may cross from Mode 2→3 or 3→0 within the same scanline.
-            // So we should also detect mode transitions within a scanline:
             let previous_mode = self.mode;
             let new_mode = if self.scanline >= 144 {
                 1
@@ -290,9 +284,9 @@ impl PPU {
         let pixel_y = map_y % 8;
 
         for x in 0..WIDTH as u16 {
-            let map_x = ((scx as u16 + x as u16) % 256);
-            let tile_col = (map_x / 8);
-            let pixel_x = (map_x % 8);
+            let map_x = (scx as u16 + x as u16) % 256;
+            let tile_col = map_x / 8;
+            let pixel_x = map_x % 8;
 
             let tile_index_addr = self.background_tilemap_area + tile_row * 32 + tile_col as u16;
             let mut tile_index = self.ram.borrow().read(tile_index_addr);
@@ -338,7 +332,8 @@ impl PPU {
 
             let y_flip = attributes & 0x40 != 0;
             let x_flip = attributes & 0x20 != 0;
-            let palette = if attributes & 0x10 != 0 { 1 } else { 0 };
+
+            //let palette = if attributes & 0x10 != 0 { 1 } else { 0 };
 
             //deterimes if the tile is behind bg or in front of bg
             let priority = attributes & 0x80 != 0;

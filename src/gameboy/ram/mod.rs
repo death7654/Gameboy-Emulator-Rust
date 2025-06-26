@@ -1,4 +1,3 @@
-
 use crate::gameboy::input;
 
 use input::Joypad;
@@ -24,8 +23,7 @@ pub struct RAM {
     pub oma_dma: bool,
     pub oma_cycles: u16,
     oma_source: u16,
-    joypad: Joypad
-
+    joypad: Joypad,
 }
 
 impl RAM {
@@ -82,10 +80,7 @@ impl RAM {
                     self.oma[(address - 0xFE00) as usize]
                 }
             }
-            0xFF00 =>
-            {
-                self.joypad.read()
-            }
+            0xFF00 => self.joypad.read(),
             0xFF01..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,

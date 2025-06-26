@@ -10,13 +10,12 @@ The timer has 4 main registers
         - this is represented by the tima_counter
     0xFF06
         - the value found in this location is stored in the TIMA when it overflows
-        - called the Timer Modulo 
+        - called the Timer Modulo
     0xFF07
         - Known as the TAC or the timer control
         - bit 2 is used to check if the TIMA counter should count
         - bits 0 and 1 are used to set the frequency
 */
-
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -50,7 +49,6 @@ impl Timer {
             self.ram.borrow_mut().div_written = false;
         }
         self.div_counter = self.div_counter.wrapping_add(t_cycles);
-       
 
         self.ram
             .borrow_mut()
@@ -58,12 +56,9 @@ impl Timer {
 
         // the overflowed value is set after one call of the timer function;
 
-        if self.timer_overflow_delay 
-        {
+        if self.timer_overflow_delay {
             self.timer_overflow_delay = false;
-        } 
-        else if self.tima_overflowed 
-        {
+        } else if self.tima_overflowed {
             // writes the value found in the timer modulo into the timer counter
             let timer_modulo = self.ram.borrow().read(0xFF06);
             self.ram.borrow_mut().write(0xFF05, timer_modulo);
@@ -87,22 +82,19 @@ impl Timer {
             };
 
             self.tima_counter += t_cycles;
-            
+
             //increments the tima counter
             while self.tima_counter >= frequency {
                 self.tima_counter -= frequency;
 
                 let ff05 = self.ram.borrow().read(0xFF05);
                 let (new_val, overflowed) = ff05.overflowing_add(1);
-                
+
                 // overflowed operations
-                if overflowed 
-                {
+                if overflowed {
                     self.timer_overflow_delay = true;
                     self.tima_overflowed = true;
-                } 
-                else 
-                {
+                } else {
                     self.ram.borrow_mut().write(0xFF05, new_val);
                 }
             }
