@@ -11,7 +11,8 @@ const NUM_OBJECTS: u16 = 40;
 
 type Tile = [[u8; 3]; 64];
 
-const DMG_BG_PALETTE: [[u8; 3]; 4] = [[255, 255, 255], [170, 170, 170], [85, 85, 85], [0, 0, 0]];
+//orginal gameboys background pallete
+const DMG_BG_PALLETE: [[u8; 3]; 4] = [[255, 255, 255], [170, 170, 170], [85, 85, 85], [0, 0, 0]];
 
 //background tile map
 const BG_MAP_UNSIGNED: u16 = 0x9800;
@@ -32,7 +33,11 @@ pub struct PPU {
     pub ram: Rc<RefCell<RAM>>,
     pub scanline: u8,
     pub scanline_cycle: u32,
+
+    //stores each tile in a cache so it does not have to be recalculated
     tile_cache: Vec<Tile>,
+
+    // lcd stats
     lcd_on: bool,
     window_tile_map_area: u16,
     window_enable: bool,
@@ -42,6 +47,7 @@ pub struct PPU {
     object_enabled: bool,
     background_and_window_enable_priority: bool,
 
+    // current mode of the ppu
     mode: u8,
 }
 
@@ -265,7 +271,7 @@ impl PPU {
                     let lo = (byte1 >> bit) & 1;
                     let hi = (byte2 >> bit) & 1;
                     let color = (hi << 1) | lo;
-                    tile[(y * 8) as usize + x] = DMG_BG_PALETTE[color as usize];
+                    tile[(y * 8) as usize + x] = DMG_BG_PALLETE[color as usize];
                 }
             }
 
@@ -371,7 +377,7 @@ impl PPU {
                     let color = tile[tile_row * 8 + col];
 
                     // Treat [0,0,0] as transparent for sprite color index 0
-                    if color == DMG_BG_PALETTE[3] {
+                    if color == DMG_BG_PALLETE[3] {
                         continue;
                     }
 
@@ -380,7 +386,7 @@ impl PPU {
                         let i = (screen_y * 160 + screen_x) * 3;
                         let bg_pixel = &self.framebuffer[i..i + 3];
 
-                        if bg_pixel != DMG_BG_PALETTE[0] {
+                        if bg_pixel != DMG_BG_PALLETE[0] {
                             continue;
                         }
                     }

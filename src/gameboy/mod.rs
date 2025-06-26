@@ -27,12 +27,12 @@ pub struct EMULATOR {
 
 impl EMULATOR {
     pub fn new(rom: Vec<u8>) -> Self {
-        let shared_ram = Rc::new(RefCell::new(RAM::new(rom)));
+        let input= Joypad::new();
+        let shared_ram = Rc::new(RefCell::new(RAM::new(rom, input.clone())));
 
 
         let cpu = CPU::new(shared_ram.clone());
         let ppu = PPU::new(shared_ram.clone());
-        let input= Joypad::new();
         let apu = Audio::new();
         let display = Display::new();
 

@@ -1,3 +1,10 @@
+/*
+    to make this truly cycle accurate we must pass in a reference from the ppu to the cpu
+    so we can increment the ppu's timer as well
+
+    generally this emulator follows the standard fetch-execute cycle
+*/
+
 mod registers;
 mod timer;
 
@@ -9,25 +16,24 @@ use registers::REGISTERS;
 
 use timer::Timer;
 
+// shared ram
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use std::fs::OpenOptions;
-use std::io::Write;
-
-//todo timer error
-//todo seperate cpu into different steps
-//increment the timer, ppu, etc every 4 cycles
-//handle interrupts every time you fetch
-
 pub struct CPU {
-    pub registers: REGISTERS,
-    pub ime: bool, //interrupt master enable
-    ime_queued: bool,
-    pub cycles: u64,
+    //calls the registers
+    registers: REGISTERS,
 
-    pub ram: Rc<RefCell<RAM>>,
+    //checks if the IME is enabled, and if its queued. The EI instruction is only enabled after one cycle
+    pub ime: bool,
+    ime_queued: bool,
+
+    cycles: u64,
+
+    ram: Rc<RefCell<RAM>>,
     timer: Timer,
+
+    // different cpu states
     pub halted: bool,
     pub stopped: bool,
 }
@@ -44,50 +50,7 @@ impl CPU {
             stopped: false,
         }
     }
-    pub fn log_cpu_state(&self) {
-        // Retrieve register values (assumes you have these getter methods)
-        let a = self.registers.get_a();
-        let f = self.registers.get_f();
-        let b = self.registers.get_b();
-        let c = self.registers.get_c();
-        let d = self.registers.get_d();
-        let e = self.registers.get_e();
-        let h = self.registers.get_h();
-        let l = self.registers.get_l();
-        let sp = self.registers.get_sp();
-        let pc = self.registers.get_pc();
 
-        // Read 4 bytes from memory starting at PC for PCMEM output.
-        let pc_mem_bytes = [
-            self.ram.borrow().read(pc.wrapping_add(0)),
-            self.ram.borrow().read(pc.wrapping_add(1)),
-            self.ram.borrow().read(pc.wrapping_add(2)),
-            self.ram.borrow().read(pc.wrapping_add(3)),
-        ];
-
-        // Format the output string.
-        let log_line = format!(
-            "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
-            a, f, b, c, d, e, h, l,
-            sp,
-            pc,
-            pc_mem_bytes[0], pc_mem_bytes[1], pc_mem_bytes[2], pc_mem_bytes[3]
-        );
-
-        // Open "cpu_log.txt" in append mode (create if it doesn't exist)
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("cpu_log.log")
-        {
-            // Write the formatted log line into the file.
-            if let Err(err) = file.write_all(log_line.as_bytes()) {
-                println!("Failed to write to log file: {}", err);
-            }
-        } else {
-            println!("Failed to open log file for writing.");
-        }
-    }
     pub fn fetch(&mut self) -> u8 {
         let pc = self.registers.get_pc();
         let value = self.ram.borrow().read(pc);
@@ -101,28 +64,33 @@ impl CPU {
             self.ime_queued = false;
         }
 
-        let ie = self.ram.borrow().read(0xFFFF);
-        let iflag = self.ram.borrow().read(0xFF0F);
-        let pending = ie & iflag;
+        // reads and checks if interrupts are enabled
+        let interrupt_enable = self.ram.borrow().read(0xFFFF);
+        let interrupt_flags = self.ram.borrow().read(0xFF0F);
+        let pending = interrupt_enable & interrupt_flags;
 
+        // checks if the cpu is halted
         if self.halted {
             self.nop(ppu);
         }
 
+        // if there are no pending interrupts return as there is nothing to do
         if pending == 0 {
             return;
         }
 
-        // 3) HALT-bug: IME=0 + pending exit HALT but do *not* service
+        // halt-bug ime = false + pending exit HALT but the interrupt is not serviced
         if !self.ime && self.halted {
             self.halt_bug(ppu);
             return;
         }
 
+        //stops halt as there is an interrupt pending
         self.halted = false;
 
+        //if ime is disabled no interrupts will be serviced
         if self.ime {
-            // 4) Service highest-priority pending interrupt
+            // Service highest-priority pending interrupt
             for &(bit, vector) in &[
                 (0, 0x0040), // V-Blank
                 (1, 0x0048), // LCD STAT
@@ -139,27 +107,32 @@ impl CPU {
     }
 
     fn service_interrupt(&mut self, bit: u8, vector: u16, ppu: &mut PPU) {
+        // disable halt if it hasnt been disabled, and disables interrupts being serviced as it can cause bugs
         self.halted = false;
         self.ime = false;
 
+        // saves the current location of the cpu into the stack
         self.push_pc();
 
-        let mut iflag = self.ram.borrow().read(0xFF0F);
+        let mut interrupt_flag = self.ram.borrow().read(0xFF0F);
         self.nop(ppu);
-        iflag &= !(1 << bit);
-        self.ram.borrow_mut().write(0xFF0F, iflag);
+        interrupt_flag &= !(1 << bit);
+        self.ram.borrow_mut().write(0xFF0F, interrupt_flag);
         self.nop(ppu);
 
+        // gets the saved state from the stack and moves it onto pc
         self.registers.set_pc(vector);
     }
 
     fn halt_bug(&mut self, ppu: &mut PPU) {
+        // the next opcode is retrieved but the cycles are not added
         self.halted = false;
         let pc = self.registers.get_pc();
         let opcode = self.ram.borrow().read(pc);
         self.execute(opcode, ppu);
     }
 
+    // saves the current state to stack
     fn push_pc(&mut self) {
         let value = self.registers.get_pc();
         self.registers
@@ -174,31 +147,39 @@ impl CPU {
             .write(self.registers.get_sp(), (value & 0xFF) as u8);
     }
 
+    // executes everything that needs to be done once per m-cycle
     fn tick(&mut self, ppu: &mut PPU) {
-        self.timer.timer(4);
-        ppu.step();
+        self.timer.timer(4); // increments timer
+        ppu.step(); // increments ppu
+
+        //checks if a dma transfer is occuring and progresses it with proper timing
         if self.ram.borrow().oma_dma {
             self.ime = false;
             self.ram.borrow_mut().oam_dma_transfer();
         }
 
+        // enables IME if it is queued
         if self.ime_queued {
             self.ime = true;
         }
     }
+    // the default do nothing instruction
     pub fn nop(&mut self, ppu: &mut PPU) {
         self.cycles += 4;
         self.tick(ppu);
     }
+    // returns a 16 bit value from the specified address
     fn load_16(&mut self, address: u16, ppu: &mut PPU) -> u8 {
         let value = self.ram.borrow().read(address);
         self.nop(ppu);
         value
     }
+    // returns the value of a
     fn load_a(&mut self, value: u8, ppu: &mut PPU) {
         self.nop(ppu);
         self.registers.set_a(value);
     }
+    // returns the value of b
     fn load_b(&mut self, data: u8, ppu: &mut PPU) {
         self.registers.set_b(data);
         self.nop(ppu);
@@ -223,15 +204,18 @@ impl CPU {
         self.registers.set_l(data);
         self.nop(ppu);
     }
+    // writes to ram
     fn store(&mut self, address: u16, data: u8, ppu: &mut PPU) {
         self.ram.borrow_mut().write(address, data);
         self.nop(ppu);
     }
 
+    // Decimal Adjust Accumulator
     fn daa(&mut self, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let mut f = self.registers.get_f();
 
+        // gets the current state of each flag
         let n = (f & FLAGS::N as u8) != 0;
         let c = (f & FLAGS::C as u8) != 0;
         let h = (f & FLAGS::H as u8) != 0;
@@ -292,6 +276,8 @@ impl CPU {
         self.registers.set_sp(sp.wrapping_add(1));
         self.nop(ppu);
     }
+
+    // rotate reg a to the left
     fn rlca(&mut self, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (a & 0x80) != 0;
@@ -308,95 +294,7 @@ impl CPU {
 
         self.nop(ppu);
     }
-
-    fn add_16bit(&mut self, value1: u16, value2: u16, ppu: &mut PPU) -> u16 {
-        let result = value1.wrapping_add(value2);
-
-        let mut f = self.registers.get_f();
-
-        //reset the N flag
-        f &= !(FLAGS::N as u8);
-
-        //setting the h fl
-        if (value1 & 0xFFF) + (value2 & 0xFFF) > 0xFFF {
-            f |= FLAGS::H as u8
-        } else {
-            f &= !(FLAGS::H as u8)
-        }
-
-        if value1 > 0xFFFF - value2 {
-            f |= FLAGS::C as u8; // Carry flag
-        } else {
-            f &= !(FLAGS::C as u8);
-        }
-
-        self.registers.set_f(f);
-        self.nop(ppu);
-        result
-    }
-    fn increment_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
-        let result = data.wrapping_add(1);
-
-        let mut f = self.registers.get_f();
-
-        //setting Z flag
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        //setting N flag
-
-        f &= !(FLAGS::N as u8);
-
-        //setting H flag
-
-        if (data & 0x0F) + 1 > 0x0F {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        self.registers.set_f(f);
-        self.nop(ppu);
-        result
-    }
-    fn decrement_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
-        let result = data.wrapping_sub(1);
-        let mut f = self.registers.get_f();
-
-        //setting Z flag
-        if result == 0 {
-            f |= FLAGS::Z as u8;
-        } else {
-            f &= !(FLAGS::Z as u8);
-        }
-
-        //setting N flag
-
-        f |= FLAGS::N as u8;
-
-        //setting H flag
-
-        if (data & 0x0F) == 0 {
-            f |= FLAGS::H as u8;
-        } else {
-            f &= !(FLAGS::H as u8);
-        }
-
-        self.registers.set_f(f & 0xF0);
-        self.nop(ppu);
-        result
-    }
-    fn zero_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
-        self.nop(ppu);
-        value & !(1 << bit)
-    }
-    fn set_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
-        self.nop(ppu);
-        value | (1 << bit)
-    }
+    //adds 8 bit numbers
     fn add_8bit(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let (result, carry) = a.overflowing_add(b); // Separate carry result
@@ -428,6 +326,34 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
+
+    // adds two 16 bit numbers as well as setting their flags
+    fn add_16bit(&mut self, value1: u16, value2: u16, ppu: &mut PPU) -> u16 {
+        let result = value1.wrapping_add(value2);
+
+        let mut f = self.registers.get_f();
+
+        //reset the N flag
+        f &= !(FLAGS::N as u8);
+
+        //setting the h fl
+        if (value1 & 0xFFF) + (value2 & 0xFFF) > 0xFFF {
+            f |= FLAGS::H as u8
+        } else {
+            f &= !(FLAGS::H as u8)
+        }
+
+        if value1 > 0xFFFF - value2 {
+            f |= FLAGS::C as u8; // Carry flag
+        } else {
+            f &= !(FLAGS::C as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop(ppu);
+        result
+    }
+    
     fn add_with_carry(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4;
@@ -459,6 +385,79 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
+
+    // increments a 8 bit number
+    fn increment_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
+        let result = data.wrapping_add(1);
+
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f &= !(FLAGS::N as u8);
+
+        //setting H flag
+
+        if (data & 0x0F) + 1 > 0x0F {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f);
+        self.nop(ppu);
+        result
+    }
+
+    // decrements an 8 bit number
+    fn decrement_8_bit(&mut self, data: u8, ppu: &mut PPU) -> u8 {
+        let result = data.wrapping_sub(1);
+        let mut f = self.registers.get_f();
+
+        //setting Z flag
+        if result == 0 {
+            f |= FLAGS::Z as u8;
+        } else {
+            f &= !(FLAGS::Z as u8);
+        }
+
+        //setting N flag
+
+        f |= FLAGS::N as u8;
+
+        //setting H flag
+
+        if (data & 0x0F) == 0 {
+            f |= FLAGS::H as u8;
+        } else {
+            f &= !(FLAGS::H as u8);
+        }
+
+        self.registers.set_f(f & 0xF0);
+        self.nop(ppu);
+        result
+    }
+
+    // zeros a bit 1->0
+    fn zero_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
+        self.nop(ppu);
+        value & !(1 << bit)
+    }
+
+    // sets a bit 0->1
+    fn set_bit_8bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) -> u8 {
+        self.nop(ppu);
+        value | (1 << bit)
+    }
+
+    // subtracts an 8 bit number
     fn sub_8bit(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let (result, borrow) = a.overflowing_sub(b);
@@ -482,6 +481,8 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
+
+    // subtracts with a carry
     fn sub_with_carry(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let carry = (self.registers.get_f() & FLAGS::C as u8) >> 4; // Extract carry flag
@@ -515,6 +516,7 @@ impl CPU {
         self.nop(ppu);
     }
 
+    // bitwise and
     fn and(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a & b;
@@ -532,6 +534,8 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
+
+    // bitwise exclusive or
     fn xor(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a ^ b;
@@ -548,6 +552,8 @@ impl CPU {
         self.registers.set_f(f);
         self.nop(ppu);
     }
+
+    // bitwise or
     fn or(&mut self, b: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a | b;
@@ -565,6 +571,7 @@ impl CPU {
         self.nop(ppu);
     }
 
+    // compares two numbers and sets it accordingly 
     fn compare(&mut self, n8: u8, ppu: &mut PPU) {
         let a = self.registers.get_a();
         let result = a.wrapping_sub(n8);
@@ -593,6 +600,7 @@ impl CPU {
         self.nop(ppu);
     }
 
+    //resets pc
     fn reset(&mut self, address: u16, ppu: &mut PPU) {
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
@@ -613,6 +621,7 @@ impl CPU {
         self.registers.set_pc(address);
         self.nop(ppu);
     }
+
     fn rotate_without_carry(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let bool;
@@ -642,6 +651,7 @@ impl CPU {
         value
     }
 
+    // rotates a value
     fn rotate(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let bool;
@@ -673,6 +683,7 @@ impl CPU {
         value
     }
 
+    // left shift or right shift
     fn shift(&mut self, mut value: u8, type_: u8, ppu: &mut PPU) -> u8 {
         // Read the old flags, but we’re going to build the new flags from scratch.
         self.nop(ppu);
@@ -704,6 +715,7 @@ impl CPU {
         value
     }
 
+    // swaps the upper nibble and the lower nibble
     fn swap(&mut self, value: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
         let result = (value >> 4) | (value << 4);
@@ -717,6 +729,8 @@ impl CPU {
         self.registers.set_f(f);
         result
     }
+
+    // special right shift
     fn right_shift(&mut self, mut value: u8, ppu: &mut PPU) -> u8 {
         self.nop(ppu);
 
@@ -741,6 +755,8 @@ impl CPU {
 
         value
     }
+
+    //sets the bit
     fn bit(&mut self, value: u8, bit: u8, ppu: &mut PPU) {
         self.nop(ppu);
         self.nop(ppu);
@@ -758,6 +774,7 @@ impl CPU {
         self.registers.set_f(f);
     }
 
+    // the main op code execution method
     pub fn execute(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {
             0x00 => {
@@ -2481,6 +2498,8 @@ impl CPU {
             }
         }
     }
+    
+    // special instruction jumped to from 0xCB
     fn cb(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {
             0x00 => {

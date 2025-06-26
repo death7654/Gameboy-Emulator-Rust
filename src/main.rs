@@ -16,7 +16,7 @@ const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/pred.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable 
     let mut emulator = EMULATOR::new(rom);
@@ -28,10 +28,8 @@ fn main() {
     let mut event_pump = emulator.display.sdl.event_pump().unwrap();
 
     'gameloop: loop {
-        // 1. Input Handling
         for evt in event_pump.poll_iter() {
             // Read current joypad state from 0xFF00.
-
             match evt {
                 Event::Quit { .. } => break 'gameloop,
                 Event::KeyDown {
@@ -43,7 +41,7 @@ fn main() {
                     emulator.input.set_key(key, true);
                     let updated = emulator.input.read();
                     println!("{}", updated);
-                    emulator.ram.borrow_mut().write(0xFF00, updated);
+                    emulator.input.write(updated);
 
                     let mut if_reg = emulator.ram.borrow().read(0xFF0F);
                     if_reg |= 1 << 4;
@@ -87,16 +85,18 @@ fn main() {
             }
         }
 
-        // 4. Render the Video Output
+        // generate the framebuffer
         emulator.ppu.render();
 
-        let fb = emulator.ppu.get_framebuffer();
-        texture.update(None, fb, 160 * 3).unwrap();
+        // get the framebuffer
+        let framebuffer = emulator.ppu.get_framebuffer();
+
+        //update textures and update the display
+        //todo move all of this to a function in the display struct
+        texture.update(None, framebuffer, 160*3).unwrap();
         emulator.display.canvas.clear();
         emulator.display.canvas.copy(&texture, None, None).unwrap();
         emulator.display.canvas.present();
         
     }
-
-    //println!("Game loop exited.");
 }

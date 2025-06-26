@@ -1,3 +1,7 @@
+
+use crate::gameboy::input;
+
+use input::Joypad;
 pub struct RAM {
     rom: Vec<u8>, //Box<[u8; 0x8000]>,
     pub vram: [u8; 0x2000],
@@ -9,21 +13,23 @@ pub struct RAM {
     pub io: [u8; 0x80],
     pub interrupt_enable: u8,
 
-    //to reset the timer counter to zero if div is written to
+    // to reset the timer counter to zero if div is written to
     pub div_written: bool,
-    //to check if the tiles should be recalculated
+    // to check if the tiles should be recalculated
     pub vram_changed: bool,
-    //to check if the ppu is active
+    // to check if the ppu is active
     pub vram_blocked: bool,
     pub oma_blocked: bool,
     // to check if oma dma transfer
     pub oma_dma: bool,
     pub oma_cycles: u16,
     oma_source: u16,
+    joypad: Joypad
+
 }
 
 impl RAM {
-    pub fn new(rom: Vec<u8>) -> Self {
+    pub fn new(rom: Vec<u8>, joypad: Joypad) -> Self {
         //let mut rom = [0; 0x8000]; // Initialize with zeroed data
         //rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
         Self {
@@ -44,6 +50,7 @@ impl RAM {
             oma_blocked: false,
             oma_cycles: 0,
             oma_source: 0,
+            joypad,
         }
     }
 
@@ -75,10 +82,14 @@ impl RAM {
                     self.oma[(address - 0xFE00) as usize]
                 }
             }
-            0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
+            0xFF00 =>
+            {
+                self.joypad.read()
+            }
+            0xFF01..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
-            _ => 0x00,
+            _ => 0xFF,
         }
     }
 
@@ -87,7 +98,7 @@ impl RAM {
         if self.oma_dma && !(0xFF80..=0xFFFE).contains(&address) {
             return;
         }
-        //bllargs test output
+        // bllargs test output
         if address == 0xFF02 && value == 0x81 {
             self.handle_serial_output();
         }
@@ -155,6 +166,7 @@ impl RAM {
         }
     }
 
+    // special functions for the dma to be processed
     fn read_during_dma(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3FFF => self.rom[address as usize],
@@ -179,6 +191,7 @@ impl RAM {
             _ => 0x00,
         }
     }
+
     pub fn write_during_dma(&mut self, address: u16, value: u8) {
         match address {
             // ROM Bank Switching
@@ -241,6 +254,7 @@ impl RAM {
         }
     }
 
+    // makes sure the oam_dma is executed properly
     pub fn oam_dma_transfer(&mut self) {
         let byte = self.read_during_dma(self.oma_source + self.oma_cycles);
         self.write_during_dma(0xFE00 + self.oma_cycles, byte);
@@ -250,14 +264,14 @@ impl RAM {
             self.oma_dma = false;
         }
     }
-    //mainly used for blargs testing
+    // mainly used for blargs testing
     fn handle_serial_output(&self) {
         // Read the value from 0xFF01 (Serial Data Register)
         let data = self.io[0x01];
         print!("{}", data as char);
     }
 
-    //special div update function, only able to be accessed by the timer
+    // special div update function, only able to be accessed by the timer
     pub fn update_div(&mut self, new: u8) {
         if let Some(slot) = self.io.get_mut((0x4) as usize) {
             *slot = new;

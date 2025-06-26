@@ -1,9 +1,11 @@
 use sdl2::keyboard::Keycode;
 
+// stores the value of our inputs
+#[derive(Clone)]
 pub struct Joypad {
     dpad: u8,
     buttons: u8,
-    reg: u8,
+    reg: u8, // used to determine how the inputs are interpreted
 }
 
 impl Joypad {
@@ -103,6 +105,7 @@ impl Joypad {
         (self.reg & 0xF0) | lower
     }
 
+    // enables movement
     pub fn write(&mut self, value: u8) {
         // Only bits 4-7 are writable; keep the lower nibble as is.
         self.reg = (self.reg & 0x0F) | (value & 0xF0);

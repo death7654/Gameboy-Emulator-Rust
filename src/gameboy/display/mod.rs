@@ -1,5 +1,9 @@
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::render::{Canvas, Texture, TextureCreator};
+/*
+Todo:
+- move everything display related into this
+ */
+
+use sdl2::render::{Canvas, TextureCreator};
 use sdl2::video::{Window, WindowContext};
 use sdl2::Sdl;
 
@@ -18,6 +22,7 @@ impl Display {
         let sdl = sdl2::init().unwrap();
         let video = sdl.video().unwrap();
 
+        // creates a window with its proper scaling
         let window = video
             .window("Rust Game Boy", WIDTH * SCALE, HEIGHT * SCALE)
             .position_centered()
@@ -25,6 +30,7 @@ impl Display {
             .build()
             .unwrap();
 
+        //creates a canvas
         let canvas = window
             .into_canvas()
             .present_vsync()
@@ -40,17 +46,5 @@ impl Display {
             texture_creator,
         }
     }
-
-    /// You can call this whenever you need a texture.
-    pub fn create_texture(&self) -> sdl2::render::Texture {
-        self.texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB24, WIDTH, HEIGHT)
-            .expect("Failed to create texture")
-    }
-    pub fn present_display(mut self, texture:&Texture<'_>)
-    {
-        self.canvas.clear();
-        self.canvas.copy(&texture, None, None).unwrap();
-        self.canvas.present();
-    }
+   
 }
