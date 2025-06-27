@@ -44,15 +44,15 @@ impl Timer {
     }
     pub fn timer(&mut self, t_cycles: u16) {
         // t_cycles are constant, the value is always 4
-        if self.ram.borrow().div_written {
+        let mut ram = self.ram.borrow_mut();
+        
+        if ram.div_written {
             self.div_counter = 0;
-            self.ram.borrow_mut().div_written = false;
+            ram.div_written = false;
         }
         self.div_counter = self.div_counter.wrapping_add(t_cycles);
 
-        self.ram
-            .borrow_mut()
-            .update_div((self.div_counter >> 8) as u8);
+        ram.update_div((self.div_counter >> 8) as u8);
 
         // the overflowed value is set after one call of the timer function;
 
@@ -60,18 +60,18 @@ impl Timer {
             self.timer_overflow_delay = false;
         } else if self.tima_overflowed {
             // writes the value found in the timer modulo into the timer counter
-            let timer_modulo = self.ram.borrow().read(0xFF06);
-            self.ram.borrow_mut().write(0xFF05, timer_modulo);
+            let timer_modulo = ram.read(0xFF06);
+            ram.write(0xFF05, timer_modulo);
             self.tima_counter = timer_modulo as u16; // sets the value in our local counter as well
 
             // writes an interrupt
-            let interrupt = (self.ram.borrow().read(0xFF0F)) | 0b0000_0100;
-            self.ram.borrow_mut().write(0xFF0F, interrupt);
+            let interrupt = (ram.read(0xFF0F)) | 0b0000_0100;
+            ram.write(0xFF0F, interrupt);
 
             self.tima_overflowed = false;
         }
 
-        let tac = self.ram.borrow().read(0xFF07);
+        let tac = ram.read(0xFF07);
         if tac & 0x4 != 0 {
             let frequency: u16 = match tac & 0b0000_0011 {
                 0 => 1024, // 4096 Hz: 1024 t-cycles cycles per increment.
@@ -87,7 +87,7 @@ impl Timer {
             while self.tima_counter >= frequency {
                 self.tima_counter -= frequency;
 
-                let ff05 = self.ram.borrow().read(0xFF05);
+                let ff05 = ram.read(0xFF05);
                 let (new_val, overflowed) = ff05.overflowing_add(1);
 
                 // overflowed operations
@@ -95,7 +95,7 @@ impl Timer {
                     self.timer_overflow_delay = true;
                     self.tima_overflowed = true;
                 } else {
-                    self.ram.borrow_mut().write(0xFF05, new_val);
+                    ram.write(0xFF05, new_val);
                 }
             }
         }

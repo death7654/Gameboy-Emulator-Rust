@@ -183,7 +183,7 @@ impl RAM {
             0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
-            _ => 0x00,
+            _ => 0xFF,
         }
     }
 

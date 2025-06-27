@@ -4,8 +4,6 @@ use gameboy::EMULATOR;
 
 use sdl2::{event::Event, pixels::PixelFormatEnum};
 
-use std::time::{Duration, Instant};
-
 // width of a gameboy screen
 const WIDTH: u32 = 160;
 
@@ -17,7 +15,7 @@ const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    let rom = std::fs::read("roms/mario_land.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -30,11 +28,7 @@ fn main() {
 
     let mut event_pump = emulator.display.sdl.event_pump().unwrap();
 
-    let frame_duration = Duration::from_micros(16_740); // ~59.7 FPS
-
     'gameloop: loop {
-        let start = Instant::now(); // 🕒 start timing
-
         for evt in event_pump.poll_iter() {
             match evt {
                 Event::Quit { .. } => break 'gameloop,
@@ -76,7 +70,7 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 60;
+        let instructions_per_frame: u32 = CPU_CLOCK / 160;
         for _ in 0..instructions_per_frame {
             if !emulator.ram.borrow().oma_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);
@@ -86,17 +80,11 @@ fn main() {
                 emulator.cpu.nop(&mut emulator.ppu);
             }
         }
-
-        emulator.ppu.render();
+        emulator.ppu.check_status();
         let framebuffer = emulator.ppu.get_framebuffer();
-
         texture.update(None, framebuffer, 160 * 3).unwrap();
         emulator.display.canvas.copy(&texture, None, None).unwrap();
         emulator.display.canvas.present();
 
-        let elapsed = start.elapsed();
-        if elapsed < frame_duration {
-            std::thread::sleep(frame_duration - elapsed);
-        }
     }
 }

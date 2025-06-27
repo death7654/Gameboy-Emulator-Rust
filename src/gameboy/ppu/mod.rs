@@ -186,8 +186,8 @@ impl PPU {
             ram.write(0xFF0F, curr_if | 0x02);
         }
     }
-
-    pub fn render(&mut self) {
+    pub fn check_status(&mut self)
+    {
         let lcd_control = self.ram.borrow().read(0xFF40);
 
         //bit 7: lcd on or off indicator
@@ -229,6 +229,12 @@ impl PPU {
         //bit 0: background and window enable priorty
         self.background_and_window_enable_priority = lcd_control & 0x01 != 0;
 
+        self.render();
+
+    }
+
+    fn render(&mut self) {
+
         //regenerate tiles if the vram has been changed
         if self.ram.borrow().vram_changed {
             self.generate_tiles();
@@ -241,6 +247,7 @@ impl PPU {
     }
 
     fn generate_tiles(&mut self) {
+        let ram = self.ram.borrow();
         //generate tiles for the maximum number of tiles
         for tile_index in 0..NUM_TILES {
             //identify the base depending on if the background bit is using signed data or unsigned data
@@ -256,8 +263,8 @@ impl PPU {
             let mut tile: Tile = self.tile_cache[tile_index];
 
             for y in 0..8 {
-                let byte1 = self.ram.borrow().read(base + y * 2);
-                let byte2 = self.ram.borrow().read(base + y * 2 + 1);
+                let byte1 = ram.read(base + y * 2);
+                let byte2 = ram.read(base + y * 2 + 1);
 
                 //calculate colors
                 for x in 0..8 {
@@ -274,9 +281,10 @@ impl PPU {
     }
 
     fn render_scanline(&mut self, y: u16) {
+        let ram = self.ram.borrow();
         // figure out the offset
-        let scy = self.ram.borrow().read(0xFF42) as u16;
-        let scx = self.ram.borrow().read(0xFF43);
+        let scy = ram.read(0xFF42) as u16;
+        let scx = ram.read(0xFF43);
 
         // gameboy uses wrapping display viewports
         let map_y = (scy + y) % 256;
@@ -289,7 +297,7 @@ impl PPU {
             let pixel_x = map_x % 8;
 
             let tile_index_addr = self.background_tilemap_area + tile_row * 32 + tile_col as u16;
-            let mut tile_index = self.ram.borrow().read(tile_index_addr);
+            let mut tile_index = ram.read(tile_index_addr);
 
             if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
                 //if using the signed version add 256
@@ -311,24 +319,26 @@ impl PPU {
         let base = 0xFE00;
         let sprite_height = if self.object_size { 16 } else { 8 };
 
+        let ram = self.ram.borrow();
+
         for i in 0..NUM_OBJECTS {
             //gets the next object
             let offset = base + i * 4;
             //reads the bytes
             //subtracts 16 from y position
-            let y_pos = self.ram.borrow().read(offset).wrapping_sub(16);
+            let y_pos = ram.read(offset).wrapping_sub(16);
             //subtracts 8 from x position
-            let x_pos = self.ram.borrow().read(offset + 1).wrapping_sub(8);
+            let x_pos = ram.read(offset + 1).wrapping_sub(8);
             // Skip off-screen sprites
             if y_pos > 160 || x_pos >= 168 {
                 continue;
             }
 
             //finds the index of the tile
-            let tile_index = self.ram.borrow().read(offset + 2) as usize;
+            let tile_index = ram.read(offset + 2) as usize;
 
             //figure out attributes of the object
-            let attributes = self.ram.borrow().read(offset + 3);
+            let attributes = ram.read(offset + 3);
 
             let y_flip = attributes & 0x40 != 0;
             let x_flip = attributes & 0x20 != 0;

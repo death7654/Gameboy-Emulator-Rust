@@ -31,7 +31,7 @@ impl EMULATOR {
 
         let cpu = CPU::new(shared_ram.clone());
         let ppu = PPU::new(shared_ram.clone());
-        let apu = Audio::new();
+        let apu = Audio::new(shared_ram.clone());
         let display = Display::new();
 
         let emulator = EMULATOR {
