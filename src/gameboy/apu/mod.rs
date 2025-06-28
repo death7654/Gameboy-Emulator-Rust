@@ -6,20 +6,24 @@ use std::rc::Rc;
 use super::ram::RAM;
 
 #[derive(Clone)]
-struct channel
-{
+struct channel {
     period_counter: u8,
     wave_form: u8,
     length_timer: u8,
     volume: u8,
     pan_left: bool,
-    pan_right: bool
+    pan_right: bool,
 }
-impl channel
-{
-    fn new() -> Self
-    {
-        channel { period_counter: 0, wave_form: 0, length_timer: 0, volume: 0, pan_left: false, pan_right: false }
+impl channel {
+    fn new() -> Self {
+        channel {
+            period_counter: 0,
+            wave_form: 0,
+            length_timer: 0,
+            volume: 0,
+            pan_left: false,
+            pan_right: false,
+        }
     }
 }
 pub struct Audio {
@@ -36,9 +40,7 @@ pub struct Audio {
     channel_4: channel,
 
     //volume
-
-
-    ram: Rc<RefCell<RAM>>
+    ram: Rc<RefCell<RAM>>,
 }
 impl Audio {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
@@ -54,25 +56,21 @@ impl Audio {
             channel_2: channel_struct.clone(),
             channel_3: channel_struct.clone(),
             channel_4: channel_struct.clone(),
-            
-            ram
-        }
-    } 
-    pub fn step(&mut self)
-    {
-        self.check_status();
 
+            ram,
+        }
+    }
+    pub fn step(&mut self) {
+        self.check_status();
     }
 
-    fn check_status(&mut self)
-    {
+    fn check_status(&mut self) {
         //ff26 or audio master control
         let ff26 = self.ram.borrow().read(0xFF26);
         self.audio_enabled = ff26 & 0b1000_0000 != 0;
 
-        if !self.audio_enabled
-        {
-           return;
+        if !self.audio_enabled {
+            return;
         }
 
         self.channel_4_enabled = ff26 & 0b0000_1000 != 0;
@@ -92,7 +90,5 @@ impl Audio {
         self.channel_3.pan_right = ff25 & 0b0000_0100 != 0;
         self.channel_2.pan_right = ff25 & 0b0000_0010 != 0;
         self.channel_1.pan_right = ff25 & 0b0000_0001 != 0;
-
-
     }
 }

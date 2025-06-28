@@ -140,7 +140,6 @@ impl PPU {
                 self.on_mode_change(); // handle STAT interrupts if needed
             }
 
-           
             if self.mode == 3 && self.scanline < 144 && self.lcd_on {
                 self.render_scanline(self.scanline as u16);
             }
@@ -186,8 +185,7 @@ impl PPU {
             ram.write(0xFF0F, curr_if | 0x02);
         }
     }
-    pub fn check_status(&mut self)
-    {
+    pub fn check_status(&mut self) {
         let lcd_control = self.ram.borrow().read(0xFF40);
 
         //bit 7: lcd on or off indicator
@@ -230,15 +228,13 @@ impl PPU {
         self.background_and_window_enable_priority = lcd_control & 0x01 != 0;
 
         self.render();
-
     }
 
     fn render(&mut self) {
-
         //regenerate tiles if the vram has been changed
-        if self.ram.borrow().vram_changed {
-            self.generate_tiles();
-        }
+        //if self.ram.borrow().vram_changed {
+        self.generate_tiles();
+        //}
 
         //render objects
         if self.object_enabled {
@@ -279,42 +275,77 @@ impl PPU {
             self.tile_cache[tile_index] = tile;
         }
     }
-
     fn render_scanline(&mut self, y: u16) {
-        let ram = self.ram.borrow();
-        // figure out the offset
-        let scy = ram.read(0xFF42) as u16;
-        let scx = ram.read(0xFF43);
+    let ram = self.ram.borrow();
 
-        // gameboy uses wrapping display viewports
-        let map_y = (scy + y) % 256;
-        let tile_row = map_y / 8;
-        let pixel_y = map_y % 8;
+    let scy = ram.read(0xFF42) as u16;
+    let scx = ram.read(0xFF43) as u16;
 
-        for x in 0..WIDTH as u16 {
-            let map_x = (scx as u16 + x as u16) % 256;
+    let wy = ram.read(0xFF4A) as u16;
+    let wx = (ram.read(0xFF4B) as u16).wrapping_sub(7); // window X offset starts at WX - 7
+
+    let using_window = self.window_enable && y >= wy && wy < 144;
+
+    for x in 0..WIDTH as u16 {
+        let (tile_map_area, tile_x, tile_y, pixel_x, pixel_y) = if using_window && x >= wx {
+            // window rendering
+            let window_x = x - wx;
+            let window_y = y - wy;
+
+            let tile_col = window_x / 8;
+            let tile_row = window_y / 8;
+            let px = window_x % 8;
+            let py = window_y % 8;
+
+            (
+                self.window_tile_map_area,
+                tile_col,
+                tile_row,
+                px,
+                py,
+            )
+        } else {
+            // background rendering
+            let map_y = (scy + y) % 256;
+            let map_x = (scx + x) % 256;
+
             let tile_col = map_x / 8;
-            let pixel_x = map_x % 8;
+            let tile_row = map_y / 8;
+            let px = map_x % 8;
+            let py = map_y % 8;
 
-            let tile_index_addr = self.background_tilemap_area + tile_row * 32 + tile_col as u16;
-            let mut tile_index = ram.read(tile_index_addr);
+            (
+                self.background_tilemap_area,
+                tile_col,
+                tile_row,
+                px,
+                py,
+            )
+        };
 
-            if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
-                //if using the signed version add 256
-                tile_index = tile_index.wrapping_add(255).wrapping_add(1);
-            }
+        let tile_index_addr = tile_map_area + tile_y * 32 + tile_x;
+        let mut tile_index = ram.read(tile_index_addr) as u16;
 
-            let color =
-                self.tile_cache[tile_index as usize][(pixel_y * 8) as usize + pixel_x as usize];
-            let i = ((y * 160) as usize + x as usize) * 3;
-            if i + 2 < self.framebuffer.len() {
-                self.framebuffer[i] = color[0];
-                self.framebuffer[i + 1] = color[1];
-                self.framebuffer[i + 2] = color[2];
-            }
+        // Handle signed tile numbers if needed
+        if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
+            tile_index = tile_index.wrapping_add(256);
+        }
+
+        let color = self.tile_cache[tile_index as usize][(pixel_y * 8 + pixel_x) as usize];
+
+        // Draw pixel to framebuffer
+        let i = ((y * 160) as usize + x as usize) * 3;
+        if i + 2 < self.framebuffer.len() {
+            self.framebuffer[i] = color[0];
+            self.framebuffer[i + 1] = color[1];
+            self.framebuffer[i + 2] = color[2];
         }
     }
+}
 
+
+    
+     
     fn render_objects(&mut self) {
         let base = 0xFE00;
         let sprite_height = if self.object_size { 16 } else { 8 };

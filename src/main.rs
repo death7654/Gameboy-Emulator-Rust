@@ -15,7 +15,7 @@ const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/mario_land.gb").unwrap();
+    let rom = std::fs::read("roms/test_roms/cgb-acid2/cgb-acid2.gbc").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -70,7 +70,7 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 160;
+        let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
             if !emulator.ram.borrow().oma_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);
@@ -85,6 +85,5 @@ fn main() {
         texture.update(None, framebuffer, 160 * 3).unwrap();
         emulator.display.canvas.copy(&texture, None, None).unwrap();
         emulator.display.canvas.present();
-
     }
 }

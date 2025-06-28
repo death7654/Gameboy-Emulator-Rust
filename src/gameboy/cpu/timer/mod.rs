@@ -45,7 +45,7 @@ impl Timer {
     pub fn timer(&mut self, t_cycles: u16) {
         // t_cycles are constant, the value is always 4
         let mut ram = self.ram.borrow_mut();
-        
+
         if ram.div_written {
             self.div_counter = 0;
             ram.div_written = false;
