@@ -15,7 +15,7 @@ const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/test_roms/cgb-acid2/cgb-acid2.gbc").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -38,9 +38,8 @@ fn main() {
                     if emulator.cpu.stopped {
                         emulator.cpu.stopped = false;
                     }
-                    emulator.input.set_key(key, true);
-                    let updated = emulator.input.read();
-                    emulator.input.write(updated);
+                    emulator.input.borrow_mut().set_key(key, true);
+
                     let mut if_reg = emulator.ram.borrow().read(0xFF0F);
                     if_reg |= 1 << 4;
                     emulator.ram.borrow_mut().write(0xFF0F, if_reg);
@@ -48,9 +47,7 @@ fn main() {
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
-                    emulator.input.set_key(key, false);
-                    let updated = emulator.input.read();
-                    emulator.ram.borrow_mut().write(0xFF00, updated);
+                    emulator.input.borrow_mut().set_key(key, false);
                 }
                 _ => {}
             }
@@ -70,7 +67,7 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 60;
+        let instructions_per_frame: u32 = CPU_CLOCK / 120;
         for _ in 0..instructions_per_frame {
             if !emulator.ram.borrow().oma_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);

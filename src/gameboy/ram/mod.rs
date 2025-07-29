@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use crate::gameboy::input;
 
 use input::Joypad;
@@ -23,11 +26,11 @@ pub struct RAM {
     pub oma_dma: bool,
     pub oma_cycles: u16,
     oma_source: u16,
-    joypad: Joypad,
+    pub joypad: Rc<RefCell<Joypad>>,
 }
 
 impl RAM {
-    pub fn new(rom: Vec<u8>, joypad: Joypad) -> Self {
+    pub fn new(rom: Vec<u8>, joypad: Rc<RefCell<Joypad>>) -> Self {
         //let mut rom = [0; 0x8000]; // Initialize with zeroed data
         //rom[..rom_data.len()].copy_from_slice(&rom_data); // Copy ROM contents
         Self {
@@ -80,12 +83,13 @@ impl RAM {
                     self.oma[(address - 0xFE00) as usize]
                 }
             }
-            0xFF00 => self.joypad.read(),
+            0xFF00 => self.joypad.borrow().read(),
             0xFF01..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
             _ => 0xFF,
         }
+        
     }
 
     //to handle writes to the ram
@@ -146,7 +150,8 @@ impl RAM {
                 self.oma_dma = true;
                 self.oma_source = (value as u16) << 8;
             }
-            0xFF00..=0xFF7F => {
+            0xFF00 => self.joypad.borrow_mut().write(value),
+            0xFF01..=0xFF7F => {
                 if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
                     *slot = value;
                 }

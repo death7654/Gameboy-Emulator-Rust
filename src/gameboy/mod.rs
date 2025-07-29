@@ -19,15 +19,15 @@ pub struct EMULATOR {
     pub cpu: cpu::CPU,
     pub ppu: ppu::PPU,
     pub ram: Rc<RefCell<RAM>>,
-    pub input: input::Joypad,
+    pub input: Rc<RefCell<Joypad>>,
     pub apu: apu::Audio,
     pub display: display::Display,
 }
 
 impl EMULATOR {
     pub fn new(rom: Vec<u8>) -> Self {
-        let input = Joypad::new();
-        let shared_ram = Rc::new(RefCell::new(RAM::new(rom, input.clone())));
+        let input = Rc::new(RefCell::new(Joypad::new()));
+        let shared_ram: Rc<RefCell<RAM>> = Rc::new(RefCell::new(RAM::new(rom, input.clone())));
 
         let cpu = CPU::new(shared_ram.clone());
         let ppu = PPU::new(shared_ram.clone());

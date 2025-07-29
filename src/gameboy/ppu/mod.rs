@@ -9,7 +9,7 @@ const HEIGHT: u32 = 144;
 const NUM_TILES: usize = 384;
 const NUM_OBJECTS: u16 = 40;
 
-type Tile = [[u8; 3]; 64];
+type Tile = [u8; 64];
 
 //orginal gameboys background pallete
 const DMG_BG_PALLETE: [[u8; 3]; 4] = [[255, 255, 255], [170, 170, 170], [85, 85, 85], [0, 0, 0]];
@@ -53,7 +53,7 @@ pub struct PPU {
 
 impl PPU {
     pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
-        let empty_tile = [[255u8; 3]; 8 * 8];
+        let empty_tile = [255u8; 8 * 8];
         let tile_cache = vec![empty_tile; NUM_TILES];
 
         ram.borrow_mut().write(0xFF44, 0);
@@ -78,72 +78,49 @@ impl PPU {
     }
 
     pub fn step(&mut self) {
-        // Add 4 T-cycles
         self.scanline_cycle += 4;
-        if self.scanline_cycle >= SCANLINE_CYCLES {
-            if self.scanline < 144 && self.lcd_on {
-                // Render the current scanline before incrementing LY
-                self.render_scanline(self.scanline as u16);
-            }
 
+        if self.scanline_cycle >= SCANLINE_CYCLES {
             // Advance LY
             self.scanline = self.scanline.wrapping_add(1);
             self.scanline_cycle -= SCANLINE_CYCLES;
+            self.ram.borrow_mut().write(0xFF44, self.scanline);
 
-            // On entering VBlank at LY == 144, request VBlank interrupt
+            // VBlank interrupt at LY == 144
             if self.scanline == 144 && self.lcd_on {
                 let mut ram = self.ram.borrow_mut();
                 let curr_if = ram.read(0xFF0F);
                 ram.write(0xFF0F, curr_if | 0x01);
             }
-            // Wrap from 153→0
+            // Wrap from 153 -> 0
             else if self.scanline > 153 {
                 self.scanline = 0;
             }
 
-            // Write LY register
-            self.ram.borrow_mut().write(0xFF44, self.scanline);
 
-            // Determine new mode based on new scanline and remaining scanline_cycle
+            // Determine new mode (NO memory blocking here!)
             let previous_mode = self.mode;
             let new_mode = if self.scanline >= 144 {
-                // VBlank period
-                1
+                1 // VBlank
+            } else if self.scanline_cycle < MODE2_CYCLES {
+                2 // OAM search
+            } else if self.scanline_cycle < MODE2_CYCLES + MODE3_CYCLES {
+                3 // Pixel transfer
             } else {
-                // Visible scanlines 0..143
-                if self.scanline_cycle < MODE2_CYCLES {
-                    // Mode 2: OAM search
-                    // Block OAM, allow VRAM
-                    let mut ram = self.ram.borrow_mut();
-                    ram.vram_blocked = false;
-                    ram.oma_blocked = true;
-                    2
-                } else if self.scanline_cycle < MODE2_CYCLES + MODE3_CYCLES {
-                    // Mode 3: Pixel transfer
-                    // Block both VRAM and OAM
-                    let mut ram = self.ram.borrow_mut();
-                    ram.vram_blocked = true;
-                    ram.oma_blocked = true;
-                    3
-                } else {
-                    // Mode 0: HBlank
-                    // Allow both VRAM and OAM
-                    let mut ram = self.ram.borrow_mut();
-                    ram.vram_blocked = false;
-                    ram.oma_blocked = false;
-                    0
-                }
+                0 // HBlank
             };
 
             if new_mode != previous_mode {
                 self.mode = new_mode;
-                self.on_mode_change(); // handle STAT interrupts if needed
+                self.on_mode_change(); // This handles memory blocking
             }
 
+            // Render when entering Mode 3
             if self.mode == 3 && self.scanline < 144 && self.lcd_on {
                 self.render_scanline(self.scanline as u16);
             }
         } else {
+            // Mid-scanline mode changes (NO memory blocking here either!)
             let previous_mode = self.mode;
             let new_mode = if self.scanline >= 144 {
                 1
@@ -154,11 +131,11 @@ impl PPU {
             } else {
                 0
             };
+
             if new_mode != previous_mode {
                 self.mode = new_mode;
                 self.on_mode_change();
 
-                // If we just entered Mode 3 mid-scanline, render that scanline now:
                 if new_mode == 3 && self.scanline < 144 && self.lcd_on {
                     self.render_scanline(self.scanline as u16);
                 }
@@ -172,12 +149,29 @@ impl PPU {
         stat |= self.mode & 0x03;
         ram.write(0xFF41, stat);
 
-        // STAT interrupts: check bits 5,4,3 for modes 2,1,0 respectively
+        // STAT interrupts check bits 5,4,3 for modes 2,1,0 respectively and handles ram blocking
         let stat = ram.read(0xFF41);
         let request_stat = match self.mode {
-            2 => (stat & (1 << 5)) != 0,
-            1 => (stat & (1 << 4)) != 0,
-            0 => (stat & (1 << 3)) != 0,
+            3 => {
+                //ram.vram_blocked = true;
+                //ram.oma_blocked = true;
+                false
+            }
+            2 => {
+                //ram.vram_blocked = false;
+                //ram.oma_blocked = true;
+                (stat & (1 << 5)) != 0
+            }
+            1 => {
+                //ram.vram_blocked = false;
+                //ram.oma_blocked = false;
+                (stat & (1 << 4)) != 0
+            }
+            0 => {
+                //ram.vram_blocked = false;
+                //ram.oma_blocked = false;
+                (stat & (1 << 3)) != 0
+            }
             _ => false,
         };
         if request_stat {
@@ -243,199 +237,184 @@ impl PPU {
     }
 
     fn generate_tiles(&mut self) {
-        let ram = self.ram.borrow();
-        //generate tiles for the maximum number of tiles
-        for tile_index in 0..NUM_TILES {
-            //identify the base depending on if the background bit is using signed data or unsigned data
-            let base = if self.background_and_window_tile_area == TILE_DATA_SIGNED {
-                // treat as signed index from -128 to 127
-                let signed_index = tile_index as i8 as i16;
-                (0x9000u16 as i16 + signed_index * 16) as u16
-            } else {
-                0x8000 + (tile_index * 16) as u16
-            };
-
-            // get the current tile stored at the current index
-            let mut tile: Tile = self.tile_cache[tile_index];
-
-            for y in 0..8 {
-                let byte1 = ram.read(base + y * 2);
-                let byte2 = ram.read(base + y * 2 + 1);
-
-                //calculate colors
-                for x in 0..8 {
-                    let bit = 7 - x;
-                    let lo = (byte1 >> bit) & 1;
-                    let hi = (byte2 >> bit) & 1;
-                    let color = (hi << 1) | lo;
-                    tile[(y * 8) as usize + x] = DMG_BG_PALLETE[color as usize];
-                }
-            }
-
-            self.tile_cache[tile_index] = tile;
-        }
-    }
-    fn render_scanline(&mut self, y: u16) {
     let ram = self.ram.borrow();
 
-    let scy = ram.read(0xFF42) as u16;
-    let scx = ram.read(0xFF43) as u16;
-
-    let wy = ram.read(0xFF4A) as u16;
-    let wx = (ram.read(0xFF4B) as u16).wrapping_sub(7); // window X offset starts at WX - 7
-
-    let using_window = self.window_enable && y >= wy && wy < 144;
-
-    for x in 0..WIDTH as u16 {
-        let (tile_map_area, tile_x, tile_y, pixel_x, pixel_y) = if using_window && x >= wx {
-            // window rendering
-            let window_x = x - wx;
-            let window_y = y - wy;
-
-            let tile_col = window_x / 8;
-            let tile_row = window_y / 8;
-            let px = window_x % 8;
-            let py = window_y % 8;
-
-            (
-                self.window_tile_map_area,
-                tile_col,
-                tile_row,
-                px,
-                py,
-            )
+    for tile_index in 0..NUM_TILES {
+        let base = if self.background_and_window_tile_area == TILE_DATA_SIGNED {
+            let signed_index = tile_index as i8 as i16;
+            (0x9000u16 as i16 + signed_index * 16) as u16
         } else {
-            // background rendering
-            let map_y = (scy + y) % 256;
-            let map_x = (scx + x) % 256;
-
-            let tile_col = map_x / 8;
-            let tile_row = map_y / 8;
-            let px = map_x % 8;
-            let py = map_y % 8;
-
-            (
-                self.background_tilemap_area,
-                tile_col,
-                tile_row,
-                px,
-                py,
-            )
+            0x8000 + (tile_index * 16) as u16
         };
 
-        let tile_index_addr = tile_map_area + tile_y * 32 + tile_x;
-        let mut tile_index = ram.read(tile_index_addr) as u16;
+        let mut tile = [0u8; 64]; // now storing color indices
 
-        // Handle signed tile numbers if needed
-        if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
-            tile_index = tile_index.wrapping_add(256);
+        for y in 0..8 {
+            let byte1 = ram.read(base + y * 2);
+            let byte2 = ram.read(base + y * 2 + 1);
+
+            for x in 0..8 {
+                let bit = 7 - x;
+                let lo = (byte1 >> bit) & 1;
+                let hi = (byte2 >> bit) & 1;
+                let color_index = (hi << 1) | lo;
+                tile[y as usize * 8 + x as usize] = color_index;
+            }
         }
 
-        let color = self.tile_cache[tile_index as usize][(pixel_y * 8 + pixel_x) as usize];
-
-        // Draw pixel to framebuffer
-        let i = ((y * 160) as usize + x as usize) * 3;
-        if i + 2 < self.framebuffer.len() {
-            self.framebuffer[i] = color[0];
-            self.framebuffer[i + 1] = color[1];
-            self.framebuffer[i + 2] = color[2];
-        }
+        self.tile_cache[tile_index] = tile;
     }
 }
 
+fn map_color_index(&self, index: u8, palette: u8) -> [u8; 3] {
+     if index > 3 {
+        return DMG_BG_PALLETE[0];
+    }
+    let shift = index * 2;
+    let shade = (palette >> shift) & 0x03;
+    DMG_BG_PALLETE[shade as usize]
+}
 
-    
-     
-    fn render_objects(&mut self) {
-        let base = 0xFE00;
-        let sprite_height = if self.object_size { 16 } else { 8 };
 
+    fn render_scanline(&mut self, y: u16) {
         let ram = self.ram.borrow();
 
-        for i in 0..NUM_OBJECTS {
-            //gets the next object
-            let offset = base + i * 4;
-            //reads the bytes
-            //subtracts 16 from y position
-            let y_pos = ram.read(offset).wrapping_sub(16);
-            //subtracts 8 from x position
-            let x_pos = ram.read(offset + 1).wrapping_sub(8);
-            // Skip off-screen sprites
-            if y_pos > 160 || x_pos >= 168 {
-                continue;
+        let scy = ram.read(0xFF42) as u16;
+        let scx = ram.read(0xFF43) as u16;
+
+        let wy = ram.read(0xFF4A) as u16;
+        let wx_raw = ram.read(0xFF4B);
+        let wx = if wx_raw >= 7 { wx_raw - 7 } else { 0 } as u16;
+        let using_window = self.window_enable && y >= wy && wy < 144;
+
+        let bg_palette = self.ram.borrow().read(0xFF47);
+
+
+        for x in 0..WIDTH as u16 {
+            let (tile_map_area, tile_x, tile_y, pixel_x, pixel_y) = if using_window && x >= wx {
+                // window rendering
+                let window_x = x - wx;
+                let window_y = y - wy;
+
+                let tile_col = window_x / 8;
+                let tile_row = window_y / 8;
+                let px = window_x % 8;
+                let py = window_y % 8;
+
+                (self.window_tile_map_area, tile_col, tile_row, px, py)
+            } else {
+                // background rendering
+                let map_y = (scy + y) % 256;
+                let map_x = (scx + x) % 256;
+
+                let tile_col = map_x / 8;
+                let tile_row = map_y / 8;
+                let px = map_x % 8;
+                let py = map_y % 8;
+
+                (self.background_tilemap_area, tile_col, tile_row, px, py)
+            };
+
+            let tile_index_addr = tile_map_area + tile_y * 32 + tile_x;
+            let mut tile_index = ram.read(tile_index_addr) as u16;
+
+            // Handle signed tile numbers if needed
+            if self.background_and_window_tile_area == TILE_DATA_SIGNED && tile_index < 128 {
+                tile_index = tile_index.wrapping_add(256);
             }
 
-            //finds the index of the tile
-            let tile_index = ram.read(offset + 2) as usize;
-
-            //figure out attributes of the object
-            let attributes = ram.read(offset + 3);
-
-            let y_flip = attributes & 0x40 != 0;
-            let x_flip = attributes & 0x20 != 0;
-
-            //let palette = if attributes & 0x10 != 0 { 1 } else { 0 };
-
-            //deterimes if the tile is behind bg or in front of bg
-            let priority = attributes & 0x80 != 0;
-
-            for tile_y in 0..sprite_height {
-                //determines where to start
-                let screen_y = y_pos as usize + tile_y;
-                if screen_y >= HEIGHT as usize {
-                    continue;
-                }
-
-                //determines if the pixel should be flipped on its y axis
-                let row = if y_flip {
-                    sprite_height - 1 - tile_y
-                } else {
-                    tile_y
-                };
-
-                let tile = if sprite_height == 16 {
-                    let actual_tile = tile_index & 0xFE;
-                    self.tile_cache[actual_tile + row / 8]
-                } else {
-                    self.tile_cache[tile_index]
-                };
-
-                let tile_row = row % 8;
-
-                for tile_x in 0..8 {
-                    let screen_x = x_pos as usize + tile_x;
-                    if screen_x >= WIDTH as usize {
-                        continue;
-                    }
-
-                    let col = if x_flip { 7 - tile_x } else { tile_x };
-
-                    let color = tile[tile_row * 8 + col];
-
-                    // Treat [0,0,0] as transparent for sprite color index 0
-                    if color == DMG_BG_PALLETE[3] {
-                        continue;
-                    }
-
-                    // Skip if priority is set AND BG pixel is not white
-                    if priority {
-                        let i = (screen_y * 160 + screen_x) * 3;
-                        let bg_pixel = &self.framebuffer[i..i + 3];
-
-                        if bg_pixel != DMG_BG_PALLETE[0] {
-                            continue;
-                        }
-                    }
-
-                    // Write sprite pixel to framebuffer
-                    let i = (screen_y * 160 + screen_x) * 3;
-                    self.framebuffer[i] = color[0];
-                    self.framebuffer[i + 1] = color[1];
-                    self.framebuffer[i + 2] = color[2];
-                }
+            let color_index = self.tile_cache[tile_index as usize][(pixel_y * 8 + pixel_x) as usize];
+            let color = self.map_color_index(color_index, bg_palette);
+            // Draw pixel to framebuffer
+            let i = ((y * 160) as usize + x as usize) * 3;
+            if i + 2 < self.framebuffer.len() {
+                self.framebuffer[i] = color[0];
+                self.framebuffer[i + 1] = color[1];
+                self.framebuffer[i + 2] = color[2];
             }
         }
     }
+
+
+    fn render_objects(&mut self) {
+    let base = 0xFE00;
+    let sprite_height = if self.object_size { 16 } else { 8 };
+
+    let obj_palette0 = self.ram.borrow().read(0xFF48);
+    let obj_palette1 = self.ram.borrow().read(0xFF49);
+
+    let ram = self.ram.borrow();
+
+    for i in 0..NUM_OBJECTS {
+        let offset = base + i * 4;
+        let y_pos = ram.read(offset).wrapping_sub(16);
+        let x_pos = ram.read(offset + 1).wrapping_sub(8);
+
+        if y_pos >= 160 || x_pos >= 168 {
+            continue;
+        }
+
+        let tile_index = ram.read(offset + 2) as usize;
+        let attributes = ram.read(offset + 3);
+
+        let y_flip = attributes & 0x40 != 0;
+        let x_flip = attributes & 0x20 != 0;
+        let palette = if attributes & 0x10 != 0 { obj_palette1 } else { obj_palette0 };
+        let priority = attributes & 0x80 != 0;
+
+        for tile_y in 0..sprite_height {
+            let screen_y = y_pos as usize + tile_y;
+            if screen_y >= HEIGHT as usize {
+                continue;
+            }
+
+            let row = if y_flip {
+                sprite_height - 1 - tile_y
+            } else {
+                tile_y
+            };
+
+            let tile = if sprite_height == 16 {
+                let actual_tile = tile_index & 0xFE;
+                self.tile_cache[actual_tile + row / 8]
+            } else {
+                self.tile_cache[tile_index]
+            };
+
+            let tile_row = row % 8;
+
+            for tile_x in 0..8 {
+                let screen_x = x_pos as usize + tile_x;
+                if screen_x >= WIDTH as usize {
+                    continue;
+                }
+
+                let col = if x_flip { 7 - tile_x } else { tile_x };
+                let color_index = tile[tile_row * 8 + col];
+
+                // Transparent pixel (index 0)
+                if color_index == 0 {
+                    continue;
+                }
+
+                // Priority check: skip sprite pixel if BG is not index 0 and sprite has priority flag set
+                if priority {
+                    let i = (screen_y * 160 + screen_x) * 3;
+                    let bg_pixel = &self.framebuffer[i..i + 3];
+                    if bg_pixel != DMG_BG_PALLETE[0] {
+                        continue;
+                    }
+                }
+
+                let color = self.map_color_index(color_index, palette);
+                let i = (screen_y * 160 + screen_x) * 3;
+                self.framebuffer[i] = color[0];
+                self.framebuffer[i + 1] = color[1];
+                self.framebuffer[i + 2] = color[2];
+            }
+        }
+    }
+}
 
     pub fn get_framebuffer(&self) -> &[u8] {
         &self.framebuffer
