@@ -13,6 +13,18 @@ const HEIGHT: u32 = 144;
 // gameboy clock speed in normal mode
 const CPU_CLOCK: u32 = 4194304;
 
+/*
+Todo
+- implement
+    - MBC
+    - Audio
+    - OAM corruption bug
+    - color mode
+    - advance mode
+
+ */
+
+
 fn main() {
     // read a rom file relative to the location of the root directory
     let rom = std::fs::read("roms/pred.gb").unwrap();
