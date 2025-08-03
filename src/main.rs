@@ -15,7 +15,7 @@ const CPU_CLOCK: u32 = 4194304;
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/tetris.gb").unwrap();
+    let rom = std::fs::read("roms/pred.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);

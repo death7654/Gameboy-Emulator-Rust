@@ -1,5 +1,5 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::gameboy::input;
 
@@ -89,7 +89,6 @@ impl RAM {
             0xFFFF => self.interrupt_enable,
             _ => 0xFF,
         }
-        
     }
 
     //to handle writes to the ram

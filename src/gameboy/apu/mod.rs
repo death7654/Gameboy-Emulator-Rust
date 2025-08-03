@@ -9,7 +9,7 @@ use super::ram::RAM;
 struct channel {
     period_counter: u8,
     wave_form: u8,
-    length_timer: u8,
+    length_timer: u16,
     volume: u8,
     pan_left: bool,
     pan_right: bool,
@@ -39,6 +39,9 @@ pub struct Audio {
     channel_3: channel,
     channel_4: channel,
 
+    //counter
+    counter: u16,
+
     //volume
     ram: Rc<RefCell<RAM>>,
 }
@@ -57,10 +60,34 @@ impl Audio {
             channel_3: channel_struct.clone(),
             channel_4: channel_struct.clone(),
 
+            counter: 0,
+
             ram,
         }
     }
     pub fn step(&mut self) {
+        self.counter += 4;
+        while self.channel_1.length_timer >= 256 {
+            self.channel_1.length_timer += 1;
+            self.channel_2.length_timer += 1;
+            self.channel_3.length_timer += 1;
+            self.channel_4.length_timer += 1;
+        }
+
+        if self.channel_1.length_timer >= 64 {
+            self.channel_1_enabled = false;
+        }
+        if self.channel_2.length_timer >= 64 {
+            self.channel_2_enabled = false;
+        }
+        if self.channel_3.length_timer >= 256 {
+            self.channel_3_enabled = false;
+        }
+
+        if self.channel_4.length_timer >= 64 {
+            self.channel_4_enabled = false;
+        }
+
         self.check_status();
     }
 
