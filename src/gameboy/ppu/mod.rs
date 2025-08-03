@@ -103,28 +103,24 @@ impl PPU {
             }
         }
 
-        // handle scanline completion (advance to next scanline)
+        // handle scanline completion
         if self.scanline_cycle >= SCANLINE_CYCLES {
             // advance to next scanline
             self.scanline = self.scanline.wrapping_add(1);
             self.scanline_cycle -= SCANLINE_CYCLES;
             self.ram.borrow_mut().write(0xFF44, self.scanline);
 
-            // VBlank interrupt at LY == 144
+            // sending a vblank interrupt
             if self.scanline == 144 && self.lcd_on {
                 let mut ram = self.ram.borrow_mut();
                 let curr_if = ram.read(0xFF0F);
                 ram.write(0xFF0F, curr_if | 0x01);
-            }
-            else if self.scanline > 153 {
+            } else if self.scanline > 153 {
                 self.scanline = 0;
             }
 
-            let final_mode = if self.scanline >= 144 {
-                1 
-            } else {
-                2 
-            };
+            // implements non-static mode switching
+            let final_mode = if self.scanline >= 144 { 1 } else { 2 };
 
             if final_mode != self.mode {
                 self.mode = final_mode;
@@ -134,12 +130,13 @@ impl PPU {
     }
     fn on_mode_change(&mut self) {
         let mut ram = self.ram.borrow_mut();
-        // update STAT mode bits 0-1, preserving coincidence bit (bit 2)
+
+        // update stat mode bits 0-1, preserving coincidence bit (bit 2)
         let mut stat = ram.read(0xFF41) & 0xF8;
         stat |= self.mode & 0x03;
         ram.write(0xFF41, stat);
 
-        // STAT interrupts check bits 5,4,3 for modes 2,1,0 respectively and attempts to handle ram blocking
+        // stat interrupts check bits 5,4,3 for modes 2,1,0 respectively and attempts to handle ram blocking
         let stat = ram.read(0xFF41);
         let request_stat = match self.mode {
             3 => {
@@ -164,6 +161,8 @@ impl PPU {
             }
             _ => false,
         };
+
+        // calls a stat interrupt
         if request_stat {
             let curr_if = ram.read(0xFF0F);
             ram.write(0xFF0F, curr_if | 0x02);
@@ -218,10 +217,10 @@ impl PPU {
     fn render(&mut self) {
         // regenerate tiles if the vram has been changed
         if self.ram.borrow().vram_changed {
-        self.generate_tiles();
+            self.generate_tiles();
         }
 
-        //render objects
+        // render objects
         if self.object_enabled {
             self.render_objects();
         }
@@ -240,7 +239,7 @@ impl PPU {
             // generate tile for unsigned addressing mode
             self.generate_single_tile(base_unsigned, tile_index);
 
-            // for signed addressing mode, we need to map tile indices differently
+            // signed addressing mode
             if tile_index < 128 {
                 // tiles 0-127 in signed mode come from 0x9000-0x97FF
                 let base_signed = 0x9000 + (tile_index * 16) as u16;
@@ -255,22 +254,25 @@ impl PPU {
 
     fn generate_single_tile(&mut self, base_addr: u16, cache_index: usize) {
         if cache_index >= self.tile_cache.len() {
-            return; 
+            return;
         }
 
-        // create a tile
+        // create a black tile
         let mut tile = [0u8; 64];
 
         for y in 0..8 {
-            // get the tile data from the ram
+            //  the game boy uses 2 bytes to calculate the color for each pixel in a tile
             let byte1 = self.ram.borrow_mut().read(base_addr + y * 2);
             let byte2 = self.ram.borrow_mut().read(base_addr + y * 2 + 1);
 
             for x in 0..8 {
                 let bit = 7 - x;
+
+                // hi | lo gives one of 4 colors, indexed 0 - 3
                 let lo = (byte1 >> bit) & 1;
                 let hi = (byte2 >> bit) & 1;
                 let color_index = (hi << 1) | lo;
+
                 tile[y as usize * 8 + x as usize] = color_index;
             }
         }
@@ -279,8 +281,9 @@ impl PPU {
     }
 
     fn get_tile_for_rendering(&self, tile_index: u8, use_signed_addressing: bool) -> &Tile {
+
         if use_signed_addressing {
-            // signed addressing, hence the offset
+            // signed addressing
             &self.tile_cache[256 + tile_index as usize]
         } else {
             // unsigned addressing
@@ -290,11 +293,13 @@ impl PPU {
 
     // matches color index with data
     fn map_color_index(&self, index: u8, palette: u8) -> [u8; 3] {
+        // safety catch
         if index > 3 {
             return DMG_BG_PALLETE[0];
         }
+
         let shift = index * 2;
-        let shade = (palette >> shift) & 0x03;
+        let shade = (palette >> shift) & 0x03; // 0x03 masks the lower 2 bits which are needed to calculate color index
         DMG_BG_PALLETE[shade as usize]
     }
 
@@ -305,8 +310,12 @@ impl PPU {
         let scx = ram.read(0xFF43) as u16;
 
         let wy = ram.read(0xFF4A) as u16;
+
+        // gets wx and prevents underflow
         let wx_raw = ram.read(0xFF4B);
         let wx = if wx_raw >= 7 { wx_raw - 7 } else { 0 } as u16;
+
+        // checks if a window is rendered
         let using_window = self.window_enable && y >= wy && wy < 144;
 
         let bg_palette = ram.read(0xFF47);
@@ -337,6 +346,7 @@ impl PPU {
                 (self.background_tilemap_area, tile_col, tile_row, px, py)
             };
 
+            // gets tile index from ram
             let tile_index_addr = tile_map_area + tile_y * 32 + tile_x;
             let tile_index = ram.read(tile_index_addr);
 
@@ -357,8 +367,12 @@ impl PPU {
 
     fn render_objects(&mut self) {
         let base = 0xFE00;
+        
+        // sprites can be 8x16 (2 tiles) or 8x8
         let sprite_height = if self.object_size { 16 } else { 8 };
 
+
+        // gets the object palletes
         let obj_palette0 = self.ram.borrow().read(0xFF48);
         let obj_palette1 = self.ram.borrow().read(0xFF49);
 
@@ -366,37 +380,49 @@ impl PPU {
 
         for i in 0..NUM_OBJECTS {
             let offset = base + i * 4;
+            //position of contantly offset
+
             let y_pos = ram.read(offset).wrapping_sub(16);
             let x_pos = ram.read(offset + 1).wrapping_sub(8);
 
+            // checks if the position values has wrapped around, or if the positional values are negative
             if y_pos >= 160 || x_pos >= 168 {
                 continue;
             }
 
+            // gets the index, and the tile attributes
             let tile_index = ram.read(offset + 2) as usize;
             let attributes = ram.read(offset + 3);
 
             let y_flip = attributes & 0x40 != 0;
             let x_flip = attributes & 0x20 != 0;
+
+            // checks which pallete to use
             let palette = if attributes & 0x10 != 0 {
                 obj_palette1
             } else {
                 obj_palette0
             };
+
             let priority = attributes & 0x80 != 0;
+
 
             for tile_y in 0..sprite_height {
                 let screen_y = y_pos as usize + tile_y;
+
+                // checks if the spirite appears outside the screen
                 if screen_y >= HEIGHT as usize {
                     continue;
                 }
 
+                // flips the tile
                 let row = if y_flip {
                     sprite_height - 1 - tile_y
                 } else {
                     tile_y
                 };
 
+                // sets the tile in its correct index
                 let tile = if sprite_height == 16 {
                     let actual_tile = tile_index & 0xFE;
                     self.tile_cache[actual_tile + row / 8]
@@ -408,6 +434,8 @@ impl PPU {
 
                 for tile_x in 0..8 {
                     let screen_x = x_pos as usize + tile_x;
+
+                    // checks if its outside the screen
                     if screen_x >= WIDTH as usize {
                         continue;
                     }
@@ -420,6 +448,7 @@ impl PPU {
                         continue;
                     }
 
+                    // checks if this tile should overwrite existing ones
                     if priority {
                         let i = (screen_y * 160 + screen_x) * 3;
                         let bg_pixel = &self.framebuffer[i..i + 3];
@@ -430,6 +459,8 @@ impl PPU {
 
                     let color = self.map_color_index(color_index, palette);
                     let i = (screen_y * 160 + screen_x) * 3;
+
+                    // renders tile.
                     self.framebuffer[i] = color[0];
                     self.framebuffer[i + 1] = color[1];
                     self.framebuffer[i + 2] = color[2];
@@ -438,6 +469,7 @@ impl PPU {
         }
     }
 
+    // returns the frame
     pub fn get_framebuffer(&self) -> &[u8] {
         &self.framebuffer
     }

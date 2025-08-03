@@ -24,7 +24,6 @@ Todo
 
  */
 
-
 fn main() {
     // read a rom file relative to the location of the root directory
     let rom = std::fs::read("roms/pred.gb").unwrap();
