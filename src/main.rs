@@ -26,7 +26,7 @@ Todo
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/pred.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -78,7 +78,7 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 120;
+        let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
             if !emulator.ram.borrow().oma_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);

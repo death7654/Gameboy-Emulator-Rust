@@ -1,5 +1,5 @@
 pub trait Cartridge {
-    fn read(&self, address: u16) -> u8;
+    fn read(&mut self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
 }
 pub struct MBC0
@@ -13,7 +13,7 @@ impl MBC0 {
     }
 }
 impl Cartridge for MBC0 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         self.rom.get(address as usize).copied().unwrap_or(0xFF)
     }
     fn write(&mut self, _address: u16, _value: u8) {
@@ -83,7 +83,7 @@ impl MBC1 {
 }
 
 impl Cartridge for MBC1 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         match address {
             0x0000..=0x7FFF => self.read_rom(address),
             0xA000..=0xBFFF => {
@@ -95,6 +95,7 @@ impl Cartridge for MBC1 {
                     } else {
                         0
                     };
+                    self.ram_enabled = false;
                     let offset = bank * 0x2000 + (address as usize - 0xA000);
                     self.eram.get(offset).copied().unwrap_or(0xFF)
                 }
