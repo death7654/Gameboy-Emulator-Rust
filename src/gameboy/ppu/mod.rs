@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::ram::RAM;
+use super::mmu::MMU;
 
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
@@ -30,7 +30,7 @@ const SCANLINE_CYCLES: u32 = MODE2_CYCLES + MODE3_CYCLES + MODE0_CYCLES;
 
 pub struct PPU {
     pub framebuffer: [u8; 160 * 144 * 3],
-    pub ram: Rc<RefCell<RAM>>,
+    pub ram: Rc<RefCell<MMU>>,
     pub scanline: u8,
     pub scanline_cycle: u32,
 
@@ -52,7 +52,7 @@ pub struct PPU {
 }
 
 impl PPU {
-    pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
+    pub fn new(ram: Rc<RefCell<MMU>>) -> Self {
         let empty_tile = [255u8; 8 * 8];
         let tile_cache = vec![empty_tile; NUM_TILES];
 

@@ -9,7 +9,7 @@ mod registers;
 mod timer;
 
 use crate::gameboy::ppu::PPU;
-use crate::gameboy::RAM;
+use crate::gameboy::MMU;
 
 use registers::FLAGS;
 use registers::REGISTERS;
@@ -30,7 +30,7 @@ pub struct CPU {
 
     cycles: u64,
 
-    ram: Rc<RefCell<RAM>>,
+    ram: Rc<RefCell<MMU>>,
     timer: Timer,
 
     // different cpu states
@@ -38,7 +38,7 @@ pub struct CPU {
     pub stopped: bool,
 }
 impl CPU {
-    pub fn new(ram_: Rc<RefCell<RAM>>) -> Self {
+    pub fn new(ram_: Rc<RefCell<MMU>>) -> Self {
         CPU {
             registers: REGISTERS::new(),
             ime: true,

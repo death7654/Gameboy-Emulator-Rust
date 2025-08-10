@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::ram::RAM;
+use super::mmu::MMU;
 
 #[derive(Clone)]
 struct channel {
@@ -43,10 +43,10 @@ pub struct Audio {
     counter: u16,
 
     //volume
-    ram: Rc<RefCell<RAM>>,
+    ram: Rc<RefCell<MMU>>,
 }
 impl Audio {
-    pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
+    pub fn new(ram: Rc<RefCell<MMU>>) -> Self {
         let channel_struct = channel::new();
         Audio {
             audio_enabled: false,

@@ -20,7 +20,7 @@ The timer has 4 main registers
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::gameboy::ram::RAM;
+use crate::gameboy::mmu::MMU;
 
 pub struct Timer {
     div_counter: u16,
@@ -28,11 +28,11 @@ pub struct Timer {
 
     timer_overflow_delay: bool,
     pub tima_overflowed: bool,
-    ram: Rc<RefCell<RAM>>,
+    ram: Rc<RefCell<MMU>>,
 }
 
 impl Timer {
-    pub fn new(ram: Rc<RefCell<RAM>>) -> Self {
+    pub fn new(ram: Rc<RefCell<MMU>>) -> Self {
         // value of div counter after boot rom is loaded and offloaded
         Timer {
             div_counter: 0xABCC,
