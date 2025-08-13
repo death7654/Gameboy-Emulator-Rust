@@ -51,7 +51,7 @@ fn main() {
                     }
                     emulator.input.borrow_mut().set_key(key, true);
 
-                    let mut if_reg = emulator.ram.borrow().read(0xFF0F);
+                    let mut if_reg = emulator.ram.borrow_mut().read(0xFF0F);
                     if_reg |= 1 << 4;
                     emulator.ram.borrow_mut().write(0xFF0F, if_reg);
                 }
@@ -80,7 +80,7 @@ fn main() {
 
         let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
-            if !emulator.ram.borrow().oma_dma {
+            if !emulator.ram.borrow_mut().oma_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);
                 let opcode = emulator.cpu.fetch();
                 emulator.cpu.execute(opcode, &mut emulator.ppu);

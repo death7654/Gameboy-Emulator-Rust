@@ -54,7 +54,7 @@ impl MMU {
     }
 
     //to read the ram's contents
-    pub fn read(&self, address: u16) -> u8 {
+    pub fn read(&mut self, address: u16) -> u8 {
         if self.oma_dma && !(0xFF80..=0xFFFE).contains(&address) {
             return 0xFF;
         }
@@ -79,7 +79,7 @@ impl MMU {
                     self.oma[(address - 0xFE00) as usize]
                 }
             }
-            0xFF00 => self.joypad.borrow().read(),
+            0xFF00 => self.joypad.borrow_mut().read(),
             0xFF01..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
@@ -151,7 +151,7 @@ impl MMU {
     }
 
     // special functions for the dma to be processed
-    fn read_during_dma(&self, address: u16) -> u8 {
+    fn read_during_dma(&mut self, address: u16) -> u8 {
         match address {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cartridge.read(address),
             0x8000..=0x9FFF => {

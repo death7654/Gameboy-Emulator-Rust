@@ -6,7 +6,7 @@ use std::rc::Rc;
 use super::mmu::MMU;
 
 #[derive(Clone)]
-struct channel {
+struct Channel {
     period_counter: u8,
     wave_form: u8,
     length_timer: u16,
@@ -14,9 +14,9 @@ struct channel {
     pan_left: bool,
     pan_right: bool,
 }
-impl channel {
+impl Channel {
     fn new() -> Self {
-        channel {
+        Channel {
             period_counter: 0,
             wave_form: 0,
             length_timer: 0,
@@ -34,10 +34,10 @@ pub struct Audio {
     channel_4_enabled: bool,
 
     //channels
-    channel_1: channel,
-    channel_2: channel,
-    channel_3: channel,
-    channel_4: channel,
+    channel_1: Channel,
+    channel_2: Channel,
+    channel_3: Channel,
+    channel_4: Channel,
 
     //counter
     counter: u16,
@@ -47,7 +47,7 @@ pub struct Audio {
 }
 impl Audio {
     pub fn new(ram: Rc<RefCell<MMU>>) -> Self {
-        let channel_struct = channel::new();
+        let channel_struct = Channel::new();
         Audio {
             audio_enabled: false,
             channel_1_enabled: false,
@@ -93,7 +93,8 @@ impl Audio {
 
     fn check_status(&mut self) {
         //ff26 or audio master control
-        let ff26 = self.ram.borrow().read(0xFF26);
+        let mut ram = self.ram.borrow_mut();
+        let ff26 = ram.read(0xFF26);
         self.audio_enabled = ff26 & 0b1000_0000 != 0;
 
         if !self.audio_enabled {
@@ -105,8 +106,9 @@ impl Audio {
         self.channel_2_enabled = ff26 & 0b0000_0010 != 0;
         self.channel_1_enabled = ff26 & 0b0000_0001 != 0;
 
+
         // ff25 determines the panning of a sound per channel
-        let ff25 = self.ram.borrow().read(0xFF25);
+        let ff25 = ram.read(0xFF25);
 
         self.channel_4.pan_left = ff25 & 0b1000_0000 != 0;
         self.channel_3.pan_left = ff25 & 0b0100_0000 != 0;
@@ -117,5 +119,9 @@ impl Audio {
         self.channel_3.pan_right = ff25 & 0b0000_0100 != 0;
         self.channel_2.pan_right = ff25 & 0b0000_0010 != 0;
         self.channel_1.pan_right = ff25 & 0b0000_0001 != 0;
+
+        // ff24 master volume and VIN panning
+
+        let ff24 = self.ram.borrow
     }
 }

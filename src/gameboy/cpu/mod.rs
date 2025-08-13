@@ -53,7 +53,7 @@ impl CPU {
 
     pub fn fetch(&mut self) -> u8 {
         let pc = self.registers.get_pc();
-        let value = self.ram.borrow().read(pc);
+        let value = self.ram.borrow_mut().read(pc);
         self.registers.set_pc(pc.wrapping_add(1));
         value
     }
@@ -65,8 +65,8 @@ impl CPU {
         }
 
         // reads and checks if interrupts are enabled
-        let interrupt_enable = self.ram.borrow().read(0xFFFF);
-        let interrupt_flags = self.ram.borrow().read(0xFF0F);
+        let interrupt_enable = self.ram.borrow_mut().read(0xFFFF);
+        let interrupt_flags = self.ram.borrow_mut().read(0xFF0F);
         let pending = interrupt_enable & interrupt_flags;
 
         // checks if the cpu is halted
@@ -114,7 +114,7 @@ impl CPU {
         // saves the current location of the cpu into the stack
         self.push_pc();
 
-        let mut interrupt_flag = self.ram.borrow().read(0xFF0F);
+        let mut interrupt_flag = self.ram.borrow_mut().read(0xFF0F);
         self.nop(ppu);
         interrupt_flag &= !(1 << bit);
         self.ram.borrow_mut().write(0xFF0F, interrupt_flag);
@@ -129,7 +129,7 @@ impl CPU {
         // the next opcode is retrieved but the cycles are not added
         self.halted = false;
         let pc = self.registers.get_pc();
-        let opcode = self.ram.borrow().read(pc);
+        let opcode = self.ram.borrow_mut().read(pc);
         self.execute(opcode, ppu);
     }
 
@@ -154,7 +154,7 @@ impl CPU {
         ppu.step(); // increments ppu
 
         //checks if a dma transfer is occuring and progresses it with proper timing
-        if self.ram.borrow().oma_dma {
+        if self.ram.borrow_mut().oma_dma {
             self.ime = false;
             self.ram.borrow_mut().oam_dma_transfer();
         }
@@ -171,7 +171,7 @@ impl CPU {
     }
     // returns a 16 bit value from the specified address
     fn load_16(&mut self, address: u16, ppu: &mut PPU) -> u8 {
-        let value = self.ram.borrow().read(address);
+        let value = self.ram.borrow_mut().read(address);
         self.nop(ppu);
         value
     }
@@ -816,7 +816,7 @@ impl CPU {
             0x06 => {
                 //load 1 byte into B
                 self.nop(ppu);
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.load_b(data, ppu);
             }
             0x07 => {
@@ -848,7 +848,7 @@ impl CPU {
                 self.registers.set_hl(result);
             }
             0x0A => {
-                let data = self.ram.borrow().read(self.registers.get_bc());
+                let data = self.ram.borrow_mut().read(self.registers.get_bc());
                 self.load_a(data, ppu);
                 self.nop(ppu);
             }
@@ -868,7 +868,7 @@ impl CPU {
                 self.registers.set_c(data);
             }
             0x0E => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 self.load_c(data, ppu);
             }
@@ -924,7 +924,7 @@ impl CPU {
             }
             0x16 => {
                 self.nop(ppu);
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.load_d(data, ppu);
             }
             0x17 => {
@@ -951,7 +951,7 @@ impl CPU {
             }
             0x18 => {
                 //relative jump
-                let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let jump = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 let new_pc = (self.registers.get_pc() as i16).wrapping_add(jump as i16) as u16;
                 self.nop(ppu);
@@ -966,7 +966,7 @@ impl CPU {
                 self.registers.set_hl(result);
             }
             0x1A => {
-                let data = self.ram.borrow().read(self.registers.get_de());
+                let data = self.ram.borrow_mut().read(self.registers.get_de());
                 self.load_a(data, ppu);
                 self.nop(ppu);
             }
@@ -987,7 +987,7 @@ impl CPU {
             }
             0x1E => {
                 //load the next byte onto register E
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 self.load_e(data, ppu);
             }
@@ -1014,7 +1014,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x20 => {
-                let jump = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let jump = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
                     self.nop(ppu);
@@ -1056,7 +1056,7 @@ impl CPU {
             }
             0x26 => {
                 self.nop(ppu);
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.load_h(data, ppu);
             }
             0x27 => {
@@ -1064,7 +1064,7 @@ impl CPU {
             }
 
             0x28 => {
-                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
                     self.nop(ppu);
@@ -1083,7 +1083,7 @@ impl CPU {
             }
             0x2A => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.registers.set_hl(address.wrapping_add(1));
                 self.load_a(data, ppu);
                 self.nop(ppu);
@@ -1103,7 +1103,7 @@ impl CPU {
                 self.registers.set_l(data);
             }
             0x2E => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 self.load_l(data, ppu);
             }
@@ -1118,7 +1118,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x30 => {
-                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
                     self.nop(ppu);
@@ -1151,7 +1151,7 @@ impl CPU {
             }
             0x34 => {
                 let address = self.registers.get_hl();
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let result = value.wrapping_add(1);
                 self.ram.borrow_mut().write(address, result);
@@ -1180,7 +1180,7 @@ impl CPU {
             }
             0x35 => {
                 let address = self.registers.get_hl();
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let result = value.wrapping_sub(1);
                 self.ram.borrow_mut().write(address, result);
@@ -1211,7 +1211,7 @@ impl CPU {
             }
             0x36 => {
                 let address = self.registers.get_hl();
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -1227,7 +1227,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x38 => {
-                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let offset = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
                     self.nop(ppu);
@@ -1264,7 +1264,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x3A => {
-                let data = self.ram.borrow().read(self.registers.get_hl());
+                let data = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers
                     .set_hl(self.registers.get_hl().wrapping_sub(1));
@@ -1287,7 +1287,7 @@ impl CPU {
                 self.registers.set_a(data);
             }
             0x3E => {
-                let value = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let value = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.load_a(value, ppu);
                 self.nop(ppu);
             }
@@ -1328,7 +1328,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x46 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_b(value);
                 self.nop(ppu);
@@ -1361,7 +1361,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x4E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_c(value);
                 self.nop(ppu);
@@ -1394,7 +1394,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x56 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_d(value);
                 self.nop(ppu);
@@ -1427,7 +1427,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x5E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_e(value);
                 self.nop(ppu);
@@ -1460,7 +1460,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x66 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_h(value);
                 self.nop(ppu);
@@ -1493,7 +1493,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0x6E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.nop(ppu);
                 self.registers.set_l(value);
                 self.nop(ppu);
@@ -1574,7 +1574,7 @@ impl CPU {
             }
             0x7E => {
                 let address = self.registers.get_hl();
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.registers.set_a(value);
                 self.nop(ppu);
@@ -1601,7 +1601,7 @@ impl CPU {
                 self.add_8bit(self.registers.get_l(), ppu);
             }
             0x86 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.add_8bit(value, ppu);
                 self.nop(ppu);
             }
@@ -1627,7 +1627,7 @@ impl CPU {
                 self.add_with_carry(self.registers.get_l(), ppu);
             }
             0x8E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.add_with_carry(value, ppu);
                 self.nop(ppu);
             }
@@ -1653,7 +1653,7 @@ impl CPU {
                 self.sub_8bit(self.registers.get_l(), ppu);
             }
             0x96 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.sub_8bit(value, ppu);
                 self.nop(ppu);
             }
@@ -1682,7 +1682,7 @@ impl CPU {
                 self.sub_with_carry(self.registers.get_l(), ppu);
             }
             0x9E => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.sub_with_carry(value, ppu);
                 self.nop(ppu);
             }
@@ -1731,7 +1731,7 @@ impl CPU {
                 self.and(self.registers.get_l(), ppu);
             }
             0xA6 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.and(value, ppu);
                 self.nop(ppu);
             }
@@ -1757,7 +1757,7 @@ impl CPU {
                 self.xor(self.registers.get_l(), ppu);
             }
             0xAE => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.xor(value, ppu);
                 self.nop(ppu);
             }
@@ -1785,7 +1785,7 @@ impl CPU {
                 self.or(self.registers.get_l(), ppu);
             }
             0xB6 => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.or(value, ppu);
                 self.nop(ppu);
             }
@@ -1811,7 +1811,7 @@ impl CPU {
                 self.compare(self.registers.get_l(), ppu);
             }
             0xBE => {
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.compare(value, ppu);
                 self.nop(ppu);
             }
@@ -1824,13 +1824,13 @@ impl CPU {
             0xC0 => {
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
-                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
 
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop(ppu);
-                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop(ppu);
@@ -1844,11 +1844,11 @@ impl CPU {
                 }
             }
             0xC1 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
@@ -1859,9 +1859,9 @@ impl CPU {
                 self.nop(ppu);
             }
             0xC2 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 if self.registers.get_f() & FLAGS::Z as u8 == 0 {
@@ -1874,9 +1874,9 @@ impl CPU {
                 }
             }
             0xC3 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
                 self.nop(ppu);
@@ -1884,9 +1884,9 @@ impl CPU {
                 self.nop(ppu);
             }
             0xC4 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -1934,7 +1934,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xC6 => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.add_8bit(data, ppu);
                 self.nop(ppu);
             }
@@ -1944,12 +1944,12 @@ impl CPU {
             0xC8 => {
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::Z as u8 != 0 {
-                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop(ppu);
-                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
@@ -1963,12 +1963,12 @@ impl CPU {
                 }
             }
             0xC9 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
@@ -1978,9 +1978,9 @@ impl CPU {
                 self.registers.set_pc(address);
             }
             0xCA => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -1998,9 +1998,9 @@ impl CPU {
                 self.cb(opcode, ppu);
             }
             0xCC => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -2028,9 +2028,9 @@ impl CPU {
                 }
             }
             0xCD => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -2055,7 +2055,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xCE => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.add_with_carry(data, ppu);
                 self.nop(ppu);
             }
@@ -2066,11 +2066,11 @@ impl CPU {
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::C as u8 == 0 {
                     self.nop(ppu);
-                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop(ppu);
-                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
@@ -2083,12 +2083,12 @@ impl CPU {
                 }
             }
             0xD1 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
@@ -2097,9 +2097,9 @@ impl CPU {
                 self.registers.set_de(value);
             }
             0xD2 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -2115,9 +2115,9 @@ impl CPU {
                 self.nop(ppu);
             }
             0xD4 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -2164,7 +2164,7 @@ impl CPU {
             }
             0xD6 => {
                 let address = self.registers.get_and_inc_pc();
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.sub_8bit(data, ppu);
                 self.nop(ppu);
             }
@@ -2174,12 +2174,12 @@ impl CPU {
             0xD8 => {
                 self.nop(ppu);
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
-                    let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
                     self.nop(ppu);
-                    let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                    let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                     self.nop(ppu);
                     self.registers
                         .set_sp(self.registers.get_sp().wrapping_add(1));
@@ -2193,12 +2193,12 @@ impl CPU {
                 }
             }
             0xD9 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
@@ -2210,9 +2210,9 @@ impl CPU {
                 self.nop(ppu);
             }
             0xDA => {
-                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper as u16) << 8) | lower as u16;
                 if self.registers.get_f() & FLAGS::C as u8 != 0 {
@@ -2227,9 +2227,9 @@ impl CPU {
                 self.nop(ppu);
             }
             0xDC => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper_byte as u16) << 8) | lower_byte as u16;
 
@@ -2261,7 +2261,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xDE => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.sub_with_carry(data, ppu);
                 self.nop(ppu);
             }
@@ -2269,7 +2269,7 @@ impl CPU {
                 self.reset(0x18, ppu);
             }
             0xE0 => {
-                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let offset = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 let address = (0xFF00 as u16).wrapping_add(offset as u16);
                 self.nop(ppu);
 
@@ -2279,11 +2279,11 @@ impl CPU {
             }
 
             0xE1 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
@@ -2327,7 +2327,7 @@ impl CPU {
             }
             0xE6 => {
                 let address = self.registers.get_and_inc_pc();
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.and(data, ppu);
                 self.nop(ppu);
             }
@@ -2337,7 +2337,7 @@ impl CPU {
             0xE8 => {
                 let sp = self.registers.get_sp();
                 self.nop(ppu);
-                let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let imm = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 let result = (sp as i16).wrapping_add(imm as i16) as u16;
                 self.nop(ppu);
@@ -2357,8 +2357,8 @@ impl CPU {
                 self.nop(ppu);
             }
             0xEA => {
-                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = (upper as u16) << 8 | lower as u16;
                 self.nop(ppu);
@@ -2376,7 +2376,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xEE => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.xor(data, ppu);
                 self.nop(ppu);
             }
@@ -2384,21 +2384,21 @@ impl CPU {
                 self.reset(0x28, ppu);
             }
             0xF0 => {
-                let offset = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let offset = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 let address = 0xFF00u16.wrapping_add(offset as u16);
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.registers.set_a(value);
                 self.nop(ppu);
             }
             0xF1 => {
-                let lower_byte = self.ram.borrow().read(self.registers.get_sp());
+                let lower_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.nop(ppu);
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
-                let upper_byte = self.ram.borrow().read(self.registers.get_sp());
+                let upper_byte = self.ram.borrow_mut().read(self.registers.get_sp());
                 self.registers
                     .set_sp(self.registers.get_sp().wrapping_add(1));
                 self.nop(ppu);
@@ -2408,7 +2408,7 @@ impl CPU {
             }
             0xF2 => {
                 let address = 0xFF00 | self.registers.get_c() as u16;
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.registers.set_a(data);
                 self.nop(ppu);
@@ -2439,7 +2439,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xF6 => {
-                let data = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let data = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.or(data, ppu);
                 self.nop(ppu);
             }
@@ -2449,7 +2449,7 @@ impl CPU {
             0xF8 => {
                 let sp = self.registers.get_sp();
                 self.nop(ppu);
-                let imm = self.ram.borrow().read(self.registers.get_and_inc_pc()) as i8;
+                let imm = self.ram.borrow_mut().read(self.registers.get_and_inc_pc()) as i8;
                 self.nop(ppu);
                 let result = (sp as i16).wrapping_add(imm as i16) as u16;
                 self.registers.set_hl(result);
@@ -2470,12 +2470,12 @@ impl CPU {
                 self.nop(ppu);
             }
             0xFA => {
-                let lower = self.ram.borrow().read(self.registers.get_and_inc_pc());
-                let upper = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let lower = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
+                let upper = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.nop(ppu);
                 let address = ((upper as u16) << 8) | lower as u16;
                 self.nop(ppu);
-                self.registers.set_a(self.ram.borrow().read(address));
+                self.registers.set_a(self.ram.borrow_mut().read(address));
                 self.nop(ppu);
                 self.nop(ppu);
             }
@@ -2490,7 +2490,7 @@ impl CPU {
                 self.nop(ppu);
             }
             0xFE => {
-                let n8 = self.ram.borrow().read(self.registers.get_and_inc_pc());
+                let n8 = self.ram.borrow_mut().read(self.registers.get_and_inc_pc());
                 self.compare(n8, ppu);
                 self.nop(ppu);
             }
@@ -2536,7 +2536,7 @@ impl CPU {
             0x06 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.rotate_without_carry(value, 0, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2580,7 +2580,7 @@ impl CPU {
             0x0E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.rotate_without_carry(value, 1, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2624,7 +2624,7 @@ impl CPU {
             0x16 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.rotate(value, 0, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2668,7 +2668,7 @@ impl CPU {
             0x1E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.rotate(value, 1, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2712,7 +2712,7 @@ impl CPU {
             0x26 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.shift(value, 0, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2756,7 +2756,7 @@ impl CPU {
             0x2E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.shift(value, 1, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2800,7 +2800,7 @@ impl CPU {
             0x36 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.swap(value, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2844,7 +2844,7 @@ impl CPU {
             0x3E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let value = self.ram.borrow().read(address);
+                let value = self.ram.borrow_mut().read(address);
                 let data = self.right_shift(value, ppu);
                 self.ram.borrow_mut().write(address, data);
                 self.nop(ppu);
@@ -2863,7 +2863,7 @@ impl CPU {
             0x45 => self.bit(self.registers.get_l(), 0, ppu),
             0x46 => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 0, ppu);
             }
             0x47 => self.bit(self.registers.get_a(), 0, ppu),
@@ -2875,7 +2875,7 @@ impl CPU {
             0x4D => self.bit(self.registers.get_l(), 1, ppu),
             0x4E => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 1, ppu);
             }
             0x4F => self.bit(self.registers.get_a(), 1, ppu),
@@ -2887,7 +2887,7 @@ impl CPU {
             0x55 => self.bit(self.registers.get_l(), 2, ppu),
             0x56 => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 2, ppu);
             }
             0x57 => self.bit(self.registers.get_a(), 2, ppu),
@@ -2899,7 +2899,7 @@ impl CPU {
             0x5D => self.bit(self.registers.get_l(), 3, ppu),
             0x5E => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 3, ppu);
             }
             0x5F => self.bit(self.registers.get_a(), 3, ppu),
@@ -2911,7 +2911,7 @@ impl CPU {
             0x65 => self.bit(self.registers.get_l(), 4, ppu),
             0x66 => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 4, ppu);
             }
             0x67 => self.bit(self.registers.get_a(), 4, ppu),
@@ -2923,7 +2923,7 @@ impl CPU {
             0x6D => self.bit(self.registers.get_l(), 5, ppu),
             0x6E => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 5, ppu);
             }
             0x6F => self.bit(self.registers.get_a(), 5, ppu),
@@ -2935,7 +2935,7 @@ impl CPU {
             0x75 => self.bit(self.registers.get_l(), 6, ppu),
             0x76 => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 6, ppu);
             }
             0x77 => self.bit(self.registers.get_a(), 6, ppu),
@@ -2947,7 +2947,7 @@ impl CPU {
             0x7D => self.bit(self.registers.get_l(), 7, ppu),
             0x7E => {
                 self.nop(ppu);
-                let value = self.ram.borrow().read(self.registers.get_hl());
+                let value = self.ram.borrow_mut().read(self.registers.get_hl());
                 self.bit(value, 7, ppu);
             }
             0x7F => self.bit(self.registers.get_a(), 7, ppu),
@@ -2985,7 +2985,7 @@ impl CPU {
             0x86 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 0));
                 self.nop(ppu);
@@ -3029,7 +3029,7 @@ impl CPU {
             0x8E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 1));
                 self.nop(ppu);
@@ -3073,7 +3073,7 @@ impl CPU {
             0x96 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 2));
                 self.nop(ppu);
@@ -3117,7 +3117,7 @@ impl CPU {
             0x9E => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 3));
                 self.nop(ppu);
@@ -3161,7 +3161,7 @@ impl CPU {
             0xA6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 4));
                 self.nop(ppu);
@@ -3205,7 +3205,7 @@ impl CPU {
             0xAE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 5));
                 self.nop(ppu);
@@ -3249,7 +3249,7 @@ impl CPU {
             0xB6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 6));
                 self.nop(ppu);
@@ -3293,7 +3293,7 @@ impl CPU {
             0xBE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let data = self.ram.borrow().read(address);
+                let data = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 self.ram.borrow_mut().write(address, data & !(1 << 7));
                 self.nop(ppu);
@@ -3337,7 +3337,7 @@ impl CPU {
             0xC6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 0);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3382,7 +3382,7 @@ impl CPU {
             0xCE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 1);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3427,7 +3427,7 @@ impl CPU {
             0xD6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 2);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3472,7 +3472,7 @@ impl CPU {
             0xDE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 3);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3517,7 +3517,7 @@ impl CPU {
             0xE6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 4);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3562,7 +3562,7 @@ impl CPU {
             0xEE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 5);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3607,7 +3607,7 @@ impl CPU {
             0xF6 => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 6);
                 self.ram.borrow_mut().write(address, new_byte);
@@ -3652,7 +3652,7 @@ impl CPU {
             0xFE => {
                 let address = self.registers.get_hl();
                 self.nop(ppu);
-                let byte = self.ram.borrow().read(address);
+                let byte = self.ram.borrow_mut().read(address);
                 self.nop(ppu);
                 let new_byte = byte | (1 << 7);
                 self.ram.borrow_mut().write(address, new_byte);

@@ -169,7 +169,7 @@ impl PPU {
         }
     }
     pub fn check_status(&mut self) {
-        let lcd_control = self.ram.borrow().read(0xFF40);
+        let lcd_control = self.ram.borrow_mut().read(0xFF40);
 
         // bit 7: lcd on or off indicator
         self.lcd_on = lcd_control & 0x80 != 0;
@@ -216,7 +216,7 @@ impl PPU {
 
     fn render(&mut self) {
         // regenerate tiles if the vram has been changed
-        if self.ram.borrow().vram_changed {
+        if self.ram.borrow_mut().vram_changed {
             self.generate_tiles();
         }
 
@@ -304,7 +304,7 @@ impl PPU {
     }
 
     fn render_scanline(&mut self, y: u16) {
-        let ram = self.ram.borrow();
+        let mut ram = self.ram.borrow_mut();
 
         let scy = ram.read(0xFF42) as u16;
         let scx = ram.read(0xFF43) as u16;
@@ -373,10 +373,10 @@ impl PPU {
 
 
         // gets the object palletes
-        let obj_palette0 = self.ram.borrow().read(0xFF48);
-        let obj_palette1 = self.ram.borrow().read(0xFF49);
+        let obj_palette0 = self.ram.borrow_mut().read(0xFF48);
+        let obj_palette1 = self.ram.borrow_mut().read(0xFF49);
 
-        let ram = self.ram.borrow();
+        let mut ram = self.ram.borrow_mut();
 
         for i in 0..NUM_OBJECTS {
             let offset = base + i * 4;
