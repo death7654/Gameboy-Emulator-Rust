@@ -33,7 +33,7 @@ pub struct MMU {
 impl MMU {
     pub fn new(joypad: Rc<RefCell<Joypad>>, cartridge: Box<dyn Cartridge>) -> Self {
         Self {
-            cartridge, //: Box::new(rom),
+            cartridge,
             vram: [0; 0x2000],
             wram: [0; 0x2000],
             rom_bank: 1,
