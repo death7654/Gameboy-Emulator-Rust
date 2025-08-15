@@ -67,24 +67,38 @@ impl Audio {
     }
     pub fn step(&mut self) {
         self.counter += 4;
-        while self.channel_1.length_timer >= 256 {
-            self.channel_1.length_timer += 1;
-            self.channel_2.length_timer += 1;
-            self.channel_3.length_timer += 1;
-            self.channel_4.length_timer += 1;
+        while self.counter >= 256 {
+            if self.channel_1_enabled
+            {
+                self.channel_1.length_timer -= 1;
+            }
+            if self.channel_2_enabled
+            { 
+                self.channel_2.length_timer -= 1;
+            }
+            if self.channel_3_enabled
+            {
+                self.channel_3.length_timer -= 1;
+            }
+            if self.channel_4_enabled
+            {
+                self.channel_4.length_timer -= 1;
+            }
+            
+            self.counter -=256;
         }
 
-        if self.channel_1.length_timer >= 64 {
+        if self.channel_1.length_timer == 0 {
             self.channel_1_enabled = false;
         }
-        if self.channel_2.length_timer >= 64 {
+        if self.channel_2.length_timer == 0 {
             self.channel_2_enabled = false;
         }
-        if self.channel_3.length_timer >= 256 {
+        if self.channel_3.length_timer == 0 {
             self.channel_3_enabled = false;
         }
 
-        if self.channel_4.length_timer >= 64 {
+        if self.channel_4.length_timer == 0 {
             self.channel_4_enabled = false;
         }
 
@@ -120,8 +134,11 @@ impl Audio {
         self.channel_2.pan_right = ff25 & 0b0000_0010 != 0;
         self.channel_1.pan_right = ff25 & 0b0000_0001 != 0;
 
-        // ff24 master volume and VIN panning
+        // ff24 master volume and VIN panning used for external audio hardware;
 
-        let ff24 = self.ram.borrow
+        // let ff24 = ram.read(0xFF24);
+
+        
+        
     }
 }
