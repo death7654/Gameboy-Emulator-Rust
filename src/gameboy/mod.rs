@@ -2,8 +2,8 @@ use apu::Audio;
 use cpu::CPU;
 use display::Display;
 use input::Joypad;
-use ppu::PPU;
 use mmu::MMU;
+use ppu::PPU;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -13,12 +13,12 @@ use crate::gameboy::cartridge::MBC0;
 use crate::gameboy::cartridge::MBC1;
 
 pub(crate) mod apu;
+pub(crate) mod cartridge;
 pub(crate) mod cpu;
 pub(crate) mod display;
 pub(crate) mod input;
-pub(crate) mod ppu;
 pub(crate) mod mmu;
-pub(crate) mod cartridge;
+pub(crate) mod ppu;
 
 pub struct EMULATOR {
     pub cpu: cpu::CPU,
@@ -34,12 +34,13 @@ impl EMULATOR {
         // moves rom into cartridge
         let cartridge: Box<dyn Cartridge> = match rom[0x0147] {
             0x00 => Box::new(MBC0::new(rom)), // ROM only
-            0x01 | 0x02 | 0x03 => Box::new(MBC1::new(rom, 0x2000)),
+            0x01 | 0x02 | 0x03 | 0x13 => Box::new(MBC1::new(rom, 0x2000)),
             other => panic!("Unsupported MBC type: {:#X}", other),
         };
 
         let input = Rc::new(RefCell::new(Joypad::new()));
-        let shared_ram: Rc<RefCell<MMU>> = Rc::new(RefCell::new(MMU::new( input.clone(), cartridge)));
+        let shared_ram: Rc<RefCell<MMU>> =
+            Rc::new(RefCell::new(MMU::new(input.clone(), cartridge)));
 
         let cpu = CPU::new(shared_ram.clone());
         let ppu = PPU::new(shared_ram.clone());

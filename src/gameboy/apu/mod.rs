@@ -68,24 +68,20 @@ impl Audio {
     pub fn step(&mut self) {
         self.counter += 4;
         while self.counter >= 256 {
-            if self.channel_1_enabled
-            {
+            if self.channel_1_enabled {
                 self.channel_1.length_timer -= 1;
             }
-            if self.channel_2_enabled
-            { 
+            if self.channel_2_enabled {
                 self.channel_2.length_timer -= 1;
             }
-            if self.channel_3_enabled
-            {
+            if self.channel_3_enabled {
                 self.channel_3.length_timer -= 1;
             }
-            if self.channel_4_enabled
-            {
+            if self.channel_4_enabled {
                 self.channel_4.length_timer -= 1;
             }
-            
-            self.counter -=256;
+
+            self.counter -= 256;
         }
 
         if self.channel_1.length_timer == 0 {
@@ -120,7 +116,6 @@ impl Audio {
         self.channel_2_enabled = ff26 & 0b0000_0010 != 0;
         self.channel_1_enabled = ff26 & 0b0000_0001 != 0;
 
-
         // ff25 determines the panning of a sound per channel
         let ff25 = ram.read(0xFF25);
 
@@ -137,8 +132,5 @@ impl Audio {
         // ff24 master volume and VIN panning used for external audio hardware;
 
         // let ff24 = ram.read(0xFF24);
-
-        
-        
     }
 }

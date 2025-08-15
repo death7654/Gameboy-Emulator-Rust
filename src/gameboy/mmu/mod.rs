@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::gameboy::cartridge::{Cartridge};
+use crate::gameboy::cartridge::Cartridge;
 use crate::gameboy::input;
 
 use input::Joypad;
@@ -10,7 +10,7 @@ pub struct MMU {
     cartridge: Box<dyn Cartridge>,
     pub vram: [u8; 0x2000],
     pub wram: [u8; 0x2000],
-    pub rom_bank: usize,    // Active ROM Bank
+    pub rom_bank: usize, // Active ROM Bank
     pub hram: [u8; 0x7F],
     pub oma: [u8; 0xA0],
     pub io: [u8; 0x80],
