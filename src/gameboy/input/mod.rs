@@ -1,11 +1,10 @@
 use sdl2::keyboard::Keycode;
 
-// stores the value of our inputs
 #[derive(Clone)]
 pub struct Joypad {
     dpad: u8,
     buttons: u8,
-    reg: u8, // used to determine how the inputs are interpreted
+    reg: u8,
 }
 
 impl Joypad {
@@ -13,100 +12,104 @@ impl Joypad {
         Joypad {
             dpad: 0x0F,
             buttons: 0x0F,
-            reg: 0xCF,
+            reg: 0xFF,
         }
     }
 
+    // update key state based on keydown/keyup
     pub fn set_key(&mut self, key: Keycode, pressed: bool) {
-        // For the D-Pad, we use WASD (W: Up, A: Left, S: Down, D: Right)
         match key {
             Keycode::W => {
-                // Up corresponds to bit 2
+                // bit 2 or the up key
                 if pressed {
-                    self.dpad &= 0b11111011;
+                    self.dpad &= !0x04;
                 } else {
-                    self.dpad |= 0b00000100;
+                    self.dpad |= 0x04;
                 }
             }
             Keycode::A => {
-                // Left corresponds to bit 1
+                // bit 1 or the left key
                 if pressed {
-                    self.dpad &= 0b11111101;
+                    self.dpad &= !0x02;
                 } else {
-                    self.dpad |= 0b00000010;
+                    self.dpad |= 0x02;
                 }
             }
             Keycode::S => {
-                // Down corresponds to bit 3
+                // bit 3 or the down key
                 if pressed {
-                    self.dpad &= 0b11110111;
+                    self.dpad &= !0x08;
                 } else {
-                    self.dpad |= 0b00001000;
+                    self.dpad |= 0x08;
                 }
             }
             Keycode::D => {
-                // Right corresponds to bit 0
+                // bit 0 or the right key
                 if pressed {
-                    self.dpad &= 0b11111110;
+                    self.dpad &= !0x01;
                 } else {
-                    self.dpad |= 0b00000001;
+                    self.dpad |= 0x01;
                 }
             }
-            // For the Button group, we use different keys:
             Keycode::Z => {
-                // A button is bit 0
+                // bit 1 or the A key
                 if pressed {
-                    self.buttons &= 0b11111110;
+                    self.buttons &= !0x01;
                 } else {
-                    self.buttons |= 0b00000001;
+                    self.buttons |= 0x01;
                 }
             }
             Keycode::X => {
-                // B button is bit 1
+                // bit 2 or the B key
                 if pressed {
-                    self.buttons &= 0b11111101;
+                    self.buttons &= !0x02;
                 } else {
-                    self.buttons |= 0b00000010;
+                    self.buttons |= 0x02;
                 }
             }
             Keycode::Backspace => {
-                // Select button is bit 2
+                // bit 2 or the select button
                 if pressed {
-                    self.buttons &= 0b11111011;
+                    self.buttons &= !0x04;
                 } else {
-                    self.buttons |= 0b00000100;
+                    self.buttons |= 0x04;
                 }
             }
             Keycode::Return => {
-                // Start button is bit 3
+                // bit 3 or the start button
                 if pressed {
-                    self.buttons &= 0b11110111;
+                    self.buttons &= !0x08;
                 } else {
-                    self.buttons |= 0b00001000;
+                    self.buttons |= 0x08;
                 }
             }
             _ => {}
         }
     }
 
+
+    // a dedicated function for the MMU to get the current value
     pub fn read(&self) -> u8 {
-        // Check selection bits (bits 4 and 5)
         let select_dpad = (self.reg & 0x10) == 0;
         let select_buttons = (self.reg & 0x20) == 0;
 
-        let lower = match (select_dpad, select_buttons) {
-            (true, false) => self.dpad,
-            (false, true) => self.buttons,
-            (true, true) => self.dpad & self.buttons, // both groups selected: bitwise AND
-            (false, false) => 0x0F,                   // if neither group is selected, return all 1s
-        };
+        let mut result = self.reg | 0xC0;
 
-        (self.reg & 0xF0) | lower
+        if select_dpad && select_buttons {
+            result = (result & 0xF0) | ((self.dpad & self.buttons) & 0x0F);
+        } else if select_dpad {
+            result = (result & 0xF0) | (self.dpad & 0x0F);
+        } else if select_buttons {
+            result = (result & 0xF0) | (self.buttons & 0x0F);
+        } else {
+            result |= 0x0F;
+        }
+
+        result
     }
 
-    // enables movement
+    // dedicated function to write to the register from the MMU
     pub fn write(&mut self, value: u8) {
-        // Only bits 4-7 are writable; keep the lower nibble as is.
-        self.reg = (self.reg & 0x0F) | (value & 0xF0);
+        self.reg = value | 0xC0;
     }
 }

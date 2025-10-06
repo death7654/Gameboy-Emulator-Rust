@@ -119,7 +119,6 @@ impl PPU {
                 self.scanline_rendered = true;
             }
             self.on_mode_change();
-
         }
 
         // handle scanline completion
@@ -457,7 +456,6 @@ impl PPU {
             for tile_x in 0..8 {
                 let screen_x = sprite_x.wrapping_add(tile_x);
 
-
                 // Skip if pixel is off screen
                 if screen_x >= 160 {
                     continue;
@@ -484,13 +482,12 @@ impl PPU {
                 if priority && bg_color_index != 0 {
                     continue;
                 }
-                
+
                 // Map sprite color using the sprite's palette
                 let color = self.map_color_index(color_index, palette);
                 self.framebuffer[fb_index] = color[0];
                 self.framebuffer[fb_index + 1] = color[1];
                 self.framebuffer[fb_index + 2] = color[2];
-
             }
         }
     }

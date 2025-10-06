@@ -12,7 +12,7 @@ pub struct MMU {
     pub wram: [u8; 0x2000],
     pub rom_bank: usize, // Active ROM Bank
     pub hram: [u8; 0x7F],
-    pub oma: [u8; 0xA0],
+    pub oam: [u8; 0xA0],
     pub io: [u8; 0x80],
     pub interrupt_enable: u8,
 
@@ -22,14 +22,34 @@ pub struct MMU {
     pub vram_changed: bool,
     // to check if the ppu is active
     pub vram_blocked: bool,
-    pub oma_blocked: bool,
-    // to check if oma dma transfer
-    pub oma_dma: bool,
-    pub oma_cycles: u16,
-    oma_source: u16,
+
+    // to check if a oam is blocked during oam transfers
+    pub oam_blocked: bool,
+    // to check if oam dma transfer
+    pub oam_dma: bool,
+    pub oam_cycles: u16,
+    oam_source: u16,
+
+    // the input with shared memory
     pub joypad: Rc<RefCell<Joypad>>,
 }
 
+
+/*
+
+    MMU or Memory Management Unit
+        - 0x0000 -> 0x7FFF => the cartridge
+        - 0x8000 -> 0x9FFF => Video RAM
+        - 0xA000 -> 0xBFFF => External RAM
+        - 0xC000 -> 0xDFFF => Work Ram (two banks of size 4KiB but are have adjacent addresses)
+        - 0xE000 -> 0xFDFF => Echo RAM 
+            - Cannot be used, banned by nintendo
+        - 0xFE00 -> 0xFE9F => OAM or Object Attribute Memory
+        - 0xFEA0 -> 0xFEFF => Banned by Nintendo
+        - 0xFF00 -> 0xFF7F => Input / Output Registers
+        - 0xFF80 -> 0xFFFE => High RAM
+        - 0xFFFF => Interrupt Enable Register
+*/
 impl MMU {
     pub fn new(joypad: Rc<RefCell<Joypad>>, cartridge: Box<dyn Cartridge>) -> Self {
         Self {
@@ -38,31 +58,32 @@ impl MMU {
             wram: [0; 0x2000],
             rom_bank: 1,
             hram: [0; 0x7F],
-            oma: [0; 0xA0],
+            oam: [0; 0xA0],
             io: [0; 0x80],
             interrupt_enable: 0,
 
             div_written: false,
             vram_changed: false,
             vram_blocked: false,
-            oma_dma: false,
-            oma_blocked: false,
-            oma_cycles: 0,
-            oma_source: 0,
+            oam_dma: false,
+            oam_blocked: false,
+            oam_cycles: 0,
+            oam_source: 0,
             joypad,
         }
     }
 
-    //to read the ram's contents
+    // to read the ram's contents
     pub fn read(&mut self, address: u16) -> u8 {
-        if self.oma_dma && !(0xFF80..=0xFFFE).contains(&address) {
+        // if there is a oam_DMA transfer and the address is outside the 
+        // specified range then returns 0xFF
+        if self.oam_dma && !(0xFF80..=0xFFFE).contains(&address) {
             return 0xFF;
         }
 
         match address {
             // Cartridge ROM & MMU are handled by the cartridge object
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cartridge.read(address),
-
             0x8000..=0x9FFF => {
                 if self.vram_blocked {
                     0xFF
@@ -73,10 +94,10 @@ impl MMU {
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
             0xE000..=0xFDFF => self.wram[(address - 0xE000) as usize],
             0xFE00..=0xFE9F => {
-                if self.oma_dma || self.oma_blocked {
+                if self.oam_dma || self.oam_blocked {
                     0xFF
                 } else {
-                    self.oma[(address - 0xFE00) as usize]
+                    self.oam[(address - 0xFE00) as usize]
                 }
             }
             0xFF00 => self.joypad.borrow_mut().read(),
@@ -88,7 +109,7 @@ impl MMU {
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
-        if self.oma_dma && !(0xFF80..=0xFFFE).contains(&address) {
+        if self.oam_dma && !(0xFF80..=0xFFFE).contains(&address) {
             return;
         }
 
@@ -114,8 +135,8 @@ impl MMU {
                 }
             }
             0xFE00..=0xFE9F => {
-                if !self.oma_blocked {
-                    if let Some(slot) = self.oma.get_mut((address - 0xFE00) as usize) {
+                if !self.oam_blocked {
+                    if let Some(slot) = self.oam.get_mut((address - 0xFE00) as usize) {
                         *slot = value;
                     }
                 }
@@ -130,9 +151,9 @@ impl MMU {
                 if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
                     *slot = value;
                 }
-                self.oma_cycles = 0;
-                self.oma_dma = true;
-                self.oma_source = (value as u16) << 8;
+                self.oam_cycles = 0;
+                self.oam_dma = true;
+                self.oam_source = (value as u16) << 8;
             }
             0xFF00 => self.joypad.borrow_mut().write(value),
             0xFF01..=0xFF7F => {
@@ -150,7 +171,8 @@ impl MMU {
         }
     }
 
-    // special functions for the dma to be processed
+    // functions that allows ram to be read and written to during OAM_DMA
+    // mainly used to prevent CPU access
     fn read_during_dma(&mut self, address: u16) -> u8 {
         match address {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cartridge.read(address),
@@ -162,7 +184,7 @@ impl MMU {
                 }
             }
             0xC000..=0xDFFF => self.wram[(address - 0xC000) as usize],
-            0xFE00..=0xFE9F => self.oma[(address - 0xFE00) as usize],
+            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
             0xFF00..=0xFF7F => self.io[(address - 0xFF00) as usize],
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupt_enable,
@@ -191,7 +213,7 @@ impl MMU {
                 }
             }
             0xFE00..=0xFE9F => {
-                if let Some(slot) = self.oma.get_mut((address - 0xFE00) as usize) {
+                if let Some(slot) = self.oam.get_mut((address - 0xFE00) as usize) {
                     *slot = value;
                 }
             }
@@ -205,9 +227,9 @@ impl MMU {
                 if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
                     *slot = value;
                 }
-                self.oma_cycles = 0;
-                self.oma_dma = true;
-                self.oma_source = (value as u16) << 8;
+                self.oam_cycles = 0;
+                self.oam_dma = true;
+                self.oam_source = (value as u16) << 8;
             }
             0xFF00..=0xFF7F => {
                 if let Some(slot) = self.io.get_mut((address - 0xFF00) as usize) {
@@ -226,22 +248,36 @@ impl MMU {
 
     // makes sure the oam_dma is executed properly
     pub fn oam_dma_transfer(&mut self) {
-        let byte = self.read_during_dma(self.oma_source + self.oma_cycles);
-        self.write_during_dma(0xFE00 + self.oma_cycles, byte);
-        self.oma_cycles = self.oma_cycles.wrapping_add(1);
+        let byte = self.read_during_dma(self.oam_source + self.oam_cycles);
+        self.write_during_dma(0xFE00 + self.oam_cycles, byte);
+        self.oam_cycles = self.oam_cycles.wrapping_add(1);
 
-        if self.oma_cycles == 160 {
-            self.oma_dma = false;
+
+        // the cycles are reset when a OAM_DMA 
+        // is initiated in the write function
+        if self.oam_cycles == 160 {
+            self.oam_dma = false;
         }
     }
-    // mainly used for blargs testing
+
+    // mainly used for blargs testing without a display/visuals
     fn handle_serial_output(&self) {
-        // Read the value from 0xFF01 (Serial Data Register)
+
+        /*
+            the serial output is found at 0xFF01
+            or the second address in the IO RAM area
+        */
+
         let data = self.io[0x01];
         print!("{}", data as char);
     }
 
-    // special div update function, only able to be accessed by the timer
+    /*  
+        - special div update function, 
+          only able to be accessed by the timer
+          as any writes to the div register wil reset it
+          as per the gameboy specifications
+    */
     pub fn update_div(&mut self, new: u8) {
         if let Some(slot) = self.io.get_mut((0x4) as usize) {
             *slot = new;

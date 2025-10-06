@@ -51,6 +51,7 @@ impl CPU {
         }
     }
 
+    // fetches the next instruction 
     pub fn fetch(&mut self) -> u8 {
         let pc = self.registers.get_pc();
         let value = self.ram.borrow_mut().read(pc);
@@ -58,6 +59,7 @@ impl CPU {
         value
     }
 
+    // used to handle system interrupts
     pub fn handle_interrupt(&mut self, ppu: &mut PPU) {
         if self.ime_queued {
             self.ime = true;
@@ -85,10 +87,10 @@ impl CPU {
             return;
         }
 
-        //stops halt as there is an interrupt pending
+        // stops halt as there is an interrupt pending
         self.halted = false;
 
-        //if ime is disabled no interrupts will be serviced
+        // if ime is disabled no interrupts will be serviced
         if self.ime {
             // Service highest-priority pending interrupt
             for &(bit, vector) in &[
@@ -106,7 +108,9 @@ impl CPU {
         }
     }
 
+    // used to service the interrupts
     fn service_interrupt(&mut self, bit: u8, vector: u16, ppu: &mut PPU) {
+
         // disable halt if it hasnt been disabled, and disables interrupts being serviced as it can cause bugs
         self.halted = false;
         self.ime = false;
@@ -114,6 +118,8 @@ impl CPU {
         // saves the current location of the cpu into the stack
         self.push_pc();
 
+
+        // modify the interrupt flags
         let mut interrupt_flag = self.ram.borrow_mut().read(0xFF0F);
         self.nop(ppu);
         interrupt_flag &= !(1 << bit);
@@ -125,15 +131,15 @@ impl CPU {
         self.nop(ppu);
     }
 
+    // the next opcode is retrieved but the cycles are not added
     fn halt_bug(&mut self, ppu: &mut PPU) {
-        // the next opcode is retrieved but the cycles are not added
         self.halted = false;
         let pc = self.registers.get_pc();
         let opcode = self.ram.borrow_mut().read(pc);
         self.execute(opcode, ppu);
     }
 
-    // saves the current state to stack
+    // moves the current state to stack
     fn push_pc(&mut self) {
         let value = self.registers.get_pc();
         self.registers
@@ -154,7 +160,7 @@ impl CPU {
         ppu.step(); // increments ppu
 
         //checks if a dma transfer is occuring and progresses it with proper timing
-        if self.ram.borrow_mut().oma_dma {
+        if self.ram.borrow_mut().oam_dma {
             self.ime = false;
             self.ram.borrow_mut().oam_dma_transfer();
         }
@@ -775,7 +781,7 @@ impl CPU {
         self.registers.set_f(f);
     }
 
-    // the main op code execution method
+    // the decode -> execute function
     pub fn execute(&mut self, opcode: u8, ppu: &mut PPU) {
         match opcode {
             0x00 => {
