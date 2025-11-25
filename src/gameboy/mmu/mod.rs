@@ -30,10 +30,11 @@ pub struct MMU {
     pub oam_cycles: u16,
     oam_source: u16,
 
+    pub oam_dma_wait: bool,
+
     // the input with shared memory
     pub joypad: Rc<RefCell<Joypad>>,
 }
-
 
 /*
 
@@ -42,7 +43,7 @@ pub struct MMU {
         - 0x8000 -> 0x9FFF => Video RAM
         - 0xA000 -> 0xBFFF => External RAM
         - 0xC000 -> 0xDFFF => Work Ram (two banks of size 4KiB but are have adjacent addresses)
-        - 0xE000 -> 0xFDFF => Echo RAM 
+        - 0xE000 -> 0xFDFF => Echo RAM
             - Cannot be used, banned by nintendo
         - 0xFE00 -> 0xFE9F => OAM or Object Attribute Memory
         - 0xFEA0 -> 0xFEFF => Banned by Nintendo
@@ -67,6 +68,7 @@ impl MMU {
             vram_blocked: false,
             oam_dma: false,
             oam_blocked: false,
+            oam_dma_wait: false,
             oam_cycles: 0,
             oam_source: 0,
             joypad,
@@ -75,7 +77,7 @@ impl MMU {
 
     // to read the ram's contents
     pub fn read(&mut self, address: u16) -> u8 {
-        // if there is a oam_DMA transfer and the address is outside the 
+        // if there is a oam_DMA transfer and the address is outside the
         // specified range then returns 0xFF
         if self.oam_dma && !(0xFF80..=0xFFFE).contains(&address) {
             return 0xFF;
@@ -248,21 +250,23 @@ impl MMU {
 
     // makes sure the oam_dma is executed properly
     pub fn oam_dma_transfer(&mut self) {
+        if self.oam_dma_wait {
+            self.oam_dma_wait = false;
+            return;
+        }
         let byte = self.read_during_dma(self.oam_source + self.oam_cycles);
         self.write_during_dma(0xFE00 + self.oam_cycles, byte);
         self.oam_cycles = self.oam_cycles.wrapping_add(1);
 
-
-        // the cycles are reset when a OAM_DMA 
+        // the cycles are reset when a OAM_DMA
         // is initiated in the write function
-        if self.oam_cycles == 160 {
+        if self.oam_cycles == 164 {
             self.oam_dma = false;
         }
     }
 
     // mainly used for blargs testing without a display/visuals
     fn handle_serial_output(&self) {
-
         /*
             the serial output is found at 0xFF01
             or the second address in the IO RAM area
@@ -272,8 +276,8 @@ impl MMU {
         print!("{}", data as char);
     }
 
-    /*  
-        - special div update function, 
+    /*
+        - special div update function,
           only able to be accessed by the timer
           as any writes to the div register wil reset it
           as per the gameboy specifications

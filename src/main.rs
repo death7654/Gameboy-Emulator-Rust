@@ -26,7 +26,7 @@ Todo
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/pred.gb").unwrap();
+    let rom = std::fs::read("roms/alleyway.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -64,22 +64,9 @@ fn main() {
             }
         }
 
-        if emulator.cpu.stopped {
-            emulator.cpu.handle_interrupt(&mut emulator.ppu);
-            emulator.cpu.nop(&mut emulator.ppu);
-            continue 'gameloop;
-        }
-
-        if emulator.cpu.halted {
-            emulator.cpu.handle_interrupt(&mut emulator.ppu);
-            if emulator.cpu.halted {
-                emulator.cpu.nop(&mut emulator.ppu);
-                continue 'gameloop;
-            }
-        }
-
         let instructions_per_frame: u32 = CPU_CLOCK / 60;
         for _ in 0..instructions_per_frame {
+
             if !emulator.ram.borrow_mut().oam_dma {
                 emulator.cpu.handle_interrupt(&mut emulator.ppu);
                 let opcode = emulator.cpu.fetch();
@@ -88,7 +75,6 @@ fn main() {
                 emulator.cpu.nop(&mut emulator.ppu);
             }
         }
-        emulator.ppu.check_status();
         let framebuffer = emulator.ppu.get_framebuffer();
         texture.update(None, framebuffer, 160 * 3).unwrap();
         emulator.display.canvas.copy(&texture, None, None).unwrap();

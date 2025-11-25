@@ -30,8 +30,8 @@ impl Cartridge for MBC0 {
         0x4000 -> 0x7FFF => Rom Bank 1
             - contains other Rom banks the ROM may use
         0xA000 -> 0xBFFF => RAM Bank 0 to 3
-            - for extra ram 
-        
+            - for extra ram
+
 
 
 */
@@ -159,9 +159,9 @@ impl Cartridge for MBC1 {
 }
 
 /*
-    MBC3
-        - Very Similar to MBC1 but with added RTC/Real Time Clock
- */
+   MBC3
+       - Very Similar to MBC1 but with added RTC/Real Time Clock
+*/
 pub struct MBC3 {
     rom: Vec<u8>,
     eram: Vec<u8>,

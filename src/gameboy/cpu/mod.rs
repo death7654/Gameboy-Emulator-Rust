@@ -51,7 +51,7 @@ impl CPU {
         }
     }
 
-    // fetches the next instruction 
+    // fetches the next instruction
     pub fn fetch(&mut self) -> u8 {
         let pc = self.registers.get_pc();
         let value = self.ram.borrow_mut().read(pc);
@@ -110,14 +110,12 @@ impl CPU {
 
     // used to service the interrupts
     fn service_interrupt(&mut self, bit: u8, vector: u16, ppu: &mut PPU) {
-
         // disable halt if it hasnt been disabled, and disables interrupts being serviced as it can cause bugs
         self.halted = false;
         self.ime = false;
 
         // saves the current location of the cpu into the stack
         self.push_pc();
-
 
         // modify the interrupt flags
         let mut interrupt_flag = self.ram.borrow_mut().read(0xFF0F);
@@ -158,6 +156,11 @@ impl CPU {
     fn tick(&mut self, ppu: &mut PPU) {
         self.timer.timer(4); // increments timer
         ppu.step(); // increments ppu
+
+        if self.halted || self.stopped
+        {
+            return;
+        }
 
         //checks if a dma transfer is occuring and progresses it with proper timing
         if self.ram.borrow_mut().oam_dma {

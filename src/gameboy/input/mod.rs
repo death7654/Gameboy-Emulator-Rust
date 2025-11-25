@@ -87,7 +87,6 @@ impl Joypad {
         }
     }
 
-
     // a dedicated function for the MMU to get the current value
     pub fn read(&self) -> u8 {
         let select_dpad = (self.reg & 0x10) == 0;
