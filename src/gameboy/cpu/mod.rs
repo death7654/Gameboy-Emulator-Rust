@@ -28,7 +28,7 @@ pub struct CPU {
     pub ime: bool,
     ime_queued: bool,
 
-    cycles: u64,
+    pub(crate) cycles: u64,
 
     ram: Rc<RefCell<MMU>>,
     timer: Timer,
@@ -61,6 +61,7 @@ impl CPU {
 
     // used to handle system interrupts
     pub fn handle_interrupt(&mut self, ppu: &mut PPU) {
+        // Enable IME if queued (happens BEFORE interrupt check)
         if self.ime_queued {
             self.ime = true;
             self.ime_queued = false;
@@ -70,11 +71,6 @@ impl CPU {
         let interrupt_enable = self.ram.borrow_mut().read(0xFFFF);
         let interrupt_flags = self.ram.borrow_mut().read(0xFF0F);
         let pending = interrupt_enable & interrupt_flags;
-
-        // checks if the cpu is halted
-        if self.halted {
-            self.nop(ppu);
-        }
 
         // if there are no pending interrupts return as there is nothing to do
         if pending == 0 {
@@ -108,25 +104,26 @@ impl CPU {
         }
     }
 
-    // used to service the interrupts
     fn service_interrupt(&mut self, bit: u8, vector: u16, ppu: &mut PPU) {
-        // disable halt if it hasnt been disabled, and disables interrupts being serviced as it can cause bugs
         self.halted = false;
         self.ime = false;
 
-        // saves the current location of the cpu into the stack
-        self.push_pc();
+        self.nop(ppu); // Internal delay (1 M-cycle)
 
-        // modify the interrupt flags
+        // Push PC to stack (2 M-cycles)
+        self.push_pc(ppu);
+
+        self.nop(ppu); // Internal delay (1 M-cycle)
+
+        // Clear interrupt flag
         let mut interrupt_flag = self.ram.borrow_mut().read(0xFF0F);
-        self.nop(ppu);
         interrupt_flag &= !(1 << bit);
         self.ram.borrow_mut().write(0xFF0F, interrupt_flag);
-        self.nop(ppu);
 
-        // gets the saved state from the stack and moves it onto pc
+        // Jump to interrupt vector
         self.registers.set_pc(vector);
-        self.nop(ppu);
+
+        self.nop(ppu); // Internal delay (1 M-cycle)
     }
 
     // the next opcode is retrieved but the cycles are not added
@@ -137,14 +134,17 @@ impl CPU {
         self.execute(opcode, ppu);
     }
 
-    // moves the current state to stack
-    fn push_pc(&mut self) {
+    fn push_pc(&mut self, ppu: &mut PPU) {
         let value = self.registers.get_pc();
+
+        self.nop(ppu);
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
         self.ram
             .borrow_mut()
             .write(self.registers.get_sp(), ((value & 0xFF00) >> 8) as u8);
+
+        self.nop(ppu);
         self.registers
             .set_sp(self.registers.get_sp().wrapping_sub(1));
         self.ram
@@ -152,25 +152,20 @@ impl CPU {
             .write(self.registers.get_sp(), (value & 0xFF) as u8);
     }
 
-    // executes everything that needs to be done once per m-cycle
-    fn tick(&mut self, ppu: &mut PPU) {
-        self.timer.timer(4); // increments timer
-        ppu.step(); // increments ppu
+    pub fn tick(&mut self, ppu: &mut PPU) {
+        self.timer.timer(4);
+        ppu.step();
 
-        if self.halted || self.stopped
-        {
+        if self.ram.borrow_mut().oam_dma {
+            self.ram.borrow_mut().oam_dma_transfer();
             return;
         }
 
-        //checks if a dma transfer is occuring and progresses it with proper timing
-        if self.ram.borrow_mut().oam_dma {
-            self.ime = false;
-            self.ram.borrow_mut().oam_dma_transfer();
-        }
+        self.handle_interrupt(ppu);
 
-        // enables IME if it is queued
-        if self.ime_queued {
-            self.ime = true;
+        // Don't do anything else if halted/stopped
+        if self.halted || self.stopped {
+            return;
         }
     }
     // the default do nothing instruction

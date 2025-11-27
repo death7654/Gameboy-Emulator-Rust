@@ -1,31 +1,9 @@
-/*
-The timer has 4 main registers
-
-    0xFF04
-        - stores the upper 8 bits of the div counter
-        - called the DIV
-        - this is represented by the div_counter in the timer structure
-    0xFF05
-        - TIMA or the timer counter
-        - this is represented by the tima_counter
-    0xFF06
-        - the value found in this location is stored in the TIMA when it overflows
-        - called the Timer Modulo
-    0xFF07
-        - Known as the TAC or the timer control
-        - bit 2 is used to check if the TIMA counter should count
-        - bits 0 and 1 are used to set the frequency
-*/
-
+use crate::gameboy::mmu::MMU;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::gameboy::mmu::MMU;
-
 pub struct Timer {
     div_counter: u16,
-    tima_counter: u16,
-
     timer_overflow_delay: bool,
     pub tima_overflowed: bool,
     ram: Rc<RefCell<MMU>>,
@@ -33,65 +11,34 @@ pub struct Timer {
 
 impl Timer {
     pub fn new(ram: Rc<RefCell<MMU>>) -> Self {
-        // value of div counter after boot rom is loaded and offloaded
+        // DIV starts at 0xAB after boot, so div_counter should represent this
         Timer {
-            div_counter: 0xABCC,
-            tima_counter: 0,
+            div_counter: 0xAB00, // Upper 8 bits = 0xAB
             timer_overflow_delay: false,
             tima_overflowed: false,
             ram,
         }
     }
-    pub fn timer(&mut self, t_cycles: u16) {
-        // t_cycles are constant, the value is always 4
-        let mut ram = self.ram.borrow_mut();
 
+    pub fn timer(&mut self, t_cycles: u16) {
+        let mut ram = self.ram.borrow_mut();
+        let tac = ram.read(0xFF07);
+        let timer_enabled = tac & 0x4 != 0;
+
+        // Handle DIV write (reset)
         if ram.div_written {
+            let old_bit = self.get_timer_bit(self.div_counter, tac);
             self.div_counter = 0;
             ram.div_written = false;
-        }
-        self.div_counter = self.div_counter.wrapping_add(t_cycles);
 
-        ram.update_div((self.div_counter >> 8) as u8);
+            // DIV reset can cause a falling edge
+            let new_bit = self.get_timer_bit(self.div_counter, tac);
+            if timer_enabled && old_bit && !new_bit {
+                let tima = ram.read(0xFF05);
+                let (new_val, overflowed) = tima.overflowing_add(1);
 
-        // the overflowed value is set after one call of the timer function;
-
-        if self.timer_overflow_delay {
-            self.timer_overflow_delay = false;
-        } else if self.tima_overflowed {
-            // writes the value found in the timer modulo into the timer counter
-            let timer_modulo = ram.read(0xFF06);
-            ram.write(0xFF05, timer_modulo);
-            self.tima_counter = timer_modulo as u16; // sets the value in our local counter as well
-
-            // writes an interrupt
-            let interrupt = (ram.read(0xFF0F)) | 0b0000_0100;
-            ram.write(0xFF0F, interrupt);
-
-            self.tima_overflowed = false;
-        }
-
-        let tac = ram.read(0xFF07);
-        if tac & 0x4 != 0 {
-            let frequency: u16 = match tac & 0b0000_0011 {
-                0 => 1024, // 4096 Hz: 1024 t-cycles cycles per increment.
-                1 => 16,   // 262144 Hz: 16 t-cycles cycles.
-                2 => 64,   // 65536 Hz: 64 t-cycles cycles.
-                3 => 256,  // 16384 Hz: 256 t-cycles cycles.
-                _ => unreachable!(),
-            };
-
-            self.tima_counter += t_cycles;
-
-            //increments the tima counter
-            while self.tima_counter >= frequency {
-                self.tima_counter -= frequency;
-
-                let ff05 = ram.read(0xFF05);
-                let (new_val, overflowed) = ff05.overflowing_add(1);
-
-                // overflowed operations
                 if overflowed {
+                    ram.write(0xFF05, 0x00);
                     self.timer_overflow_delay = true;
                     self.tima_overflowed = true;
                 } else {
@@ -99,5 +46,64 @@ impl Timer {
                 }
             }
         }
+
+        // Process each t-cycle individually to catch all edges
+        for _ in 0..t_cycles {
+            // Handle overflow state machine FIRST
+            if self.timer_overflow_delay {
+                self.timer_overflow_delay = false;
+                // tima_overflowed stays true
+            } else if self.tima_overflowed {
+                let timer_modulo = ram.read(0xFF06);
+                ram.write(0xFF05, timer_modulo);
+
+                let interrupt = ram.read(0xFF0F) | 0b0000_0100;
+                ram.write(0xFF0F, interrupt);
+
+                self.tima_overflowed = false;
+            }
+
+            // Store old bit state
+            let old_bit = if timer_enabled {
+                self.get_timer_bit(self.div_counter, tac)
+            } else {
+                false
+            };
+
+            // Increment DIV by 1 t-cycle
+            self.div_counter = self.div_counter.wrapping_add(1);
+
+            // Update DIV register (upper 8 bits)
+            ram.update_div((self.div_counter >> 8) as u8);
+
+            // Check for falling edge
+            if timer_enabled {
+                let new_bit = self.get_timer_bit(self.div_counter, tac);
+
+                if old_bit && !new_bit {
+                    let tima = ram.read(0xFF05);
+                    let (new_val, overflowed) = tima.overflowing_add(1);
+
+                    if overflowed {
+                        ram.write(0xFF05, 0x00);
+                        self.timer_overflow_delay = true;
+                        self.tima_overflowed = true;
+                    } else {
+                        ram.write(0xFF05, new_val);
+                    }
+                }
+            }
+        }
+    }
+    // Gets the state of the bit used for timer incrementing
+    fn get_timer_bit(&self, counter: u16, tac: u8) -> bool {
+        let bit_position = match tac & 0b11 {
+            0 => 9, // 4096 Hz: bit 9 (every 1024 t-cycles)
+            1 => 3, // 262144 Hz: bit 3 (every 16 t-cycles)
+            2 => 5, // 65536 Hz: bit 5 (every 64 t-cycles)
+            3 => 7, // 16384 Hz: bit 7 (every 256 t-cycles)
+            _ => unreachable!(),
+        };
+        (counter >> bit_position) & 1 == 1
     }
 }

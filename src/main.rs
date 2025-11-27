@@ -4,6 +4,8 @@ use gameboy::EMULATOR;
 
 use sdl2::{event::Event, pixels::PixelFormatEnum};
 
+use crate::gameboy::cpu::CPU;
+
 // width of a gameboy screen
 const WIDTH: u32 = 160;
 
@@ -11,7 +13,8 @@ const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 
 // gameboy clock speed in normal mode
-const CPU_CLOCK: u32 = 4194304;
+const CPU_CLOCK: u64 = 4194304;
+const FRAMES: u64 = 60;
 
 /*
 Todo
@@ -26,7 +29,7 @@ Todo
 
 fn main() {
     // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/alleyway.gb").unwrap();
+    let rom = std::fs::read("roms/tetris.gb").unwrap();
 
     // create a new emulator object and load in rom, it must be mutable
     let mut emulator = EMULATOR::new(rom);
@@ -64,11 +67,13 @@ fn main() {
             }
         }
 
-        let instructions_per_frame: u32 = CPU_CLOCK / 60;
-        for _ in 0..instructions_per_frame {
+        const CYCLES_PER_FRAME: u64 = CPU_CLOCK / FRAMES; // 4194304 Hz / 59.7 fps
+        let target_cycles = emulator.cpu.cycles + CYCLES_PER_FRAME;
 
-            if !emulator.ram.borrow_mut().oam_dma {
-                emulator.cpu.handle_interrupt(&mut emulator.ppu);
+        while emulator.cpu.cycles < target_cycles {
+            if emulator.cpu.halted {
+                emulator.cpu.nop(&mut emulator.ppu);
+            } else if !emulator.ram.borrow_mut().oam_dma {
                 let opcode = emulator.cpu.fetch();
                 emulator.cpu.execute(opcode, &mut emulator.ppu);
             } else {

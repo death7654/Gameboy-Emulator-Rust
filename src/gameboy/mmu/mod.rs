@@ -64,7 +64,7 @@ impl MMU {
             interrupt_enable: 0,
 
             div_written: false,
-            vram_changed: false,
+            vram_changed: true,
             vram_blocked: false,
             oam_dma: false,
             oam_blocked: false,
