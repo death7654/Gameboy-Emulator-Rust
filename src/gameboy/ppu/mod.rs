@@ -53,7 +53,6 @@ pub struct PPU {
 
     // window line counter for proper window rendering
     window_line_counter: u8,
-    scanline_rendered: bool,
 }
 
 impl PPU {
@@ -82,7 +81,6 @@ impl PPU {
 
             mode: 2,
             window_line_counter: 0,
-            scanline_rendered: false,
         }
     }
 
@@ -95,76 +93,109 @@ impl PPU {
             return;
         }
 
+        // Store previous state for mode change detection
+        let previous_mode = self.mode;
+        
+        // Increment cycle counter
         self.scanline_cycle += 4;
 
-        // determine the current mode based on scanline_cycle position
-        let previous_mode = self.mode;
-        let new_mode = if self.scanline >= 144 {
-            1 // VBlank
-        } else if self.scanline_cycle < MODE2_CYCLES {
-            2 // OAM search
-        } else if self.scanline_cycle < MODE2_CYCLES + MODE3_CYCLES {
-            3 // Pixel transfer
+        // Determine the current mode based on scanline and cycle position
+        if self.scanline >= 144 {
+            // VBlank mode
+            self.mode = 1;
         } else {
-            0 // HBlank
-        };
-
-        // handle mode changes
-        if new_mode != previous_mode {
-            self.mode = new_mode;
-
-            // render when entering Mode 3
-            if self.mode == 3 && !self.scanline_rendered && self.scanline < 144 {
-                self.render_scanline();
-                self.scanline_rendered = true;
+            // Visible scanline - determine mode by cycle position
+            if self.scanline_cycle <= MODE2_CYCLES {
+                self.mode = 2; // OAM search
+            } else if self.scanline_cycle <= MODE2_CYCLES + MODE3_CYCLES {
+                self.mode = 3; // Pixel transfer
+            } else {
+                self.mode = 0; // HBlank
             }
+        }
+
+        if self.mode == 3 && self.scanline < 144 {
+            // Only render once per scanline - check if we just entered mode 3
+            if previous_mode == 2 {
+                self.render_scanline();
+            }
+        }
+
+        // Handle mode change interrupts
+        if self.mode != previous_mode {
             self.on_mode_change();
         }
 
-        // handle scanline completion
+        // Handle scanline completion
         if self.scanline_cycle >= SCANLINE_CYCLES {
-            // advance to next scanline
-            self.scanline = self.scanline.wrapping_add(1);
+            // Move to next scanline
             self.scanline_cycle -= SCANLINE_CYCLES;
-            self.scanline_rendered = false;
+            self.scanline = self.scanline.wrapping_add(1);
+            
+            // Write scanline to LY register
             self.ram.borrow_mut().write(0xFF44, self.scanline);
+
+            // Check for LYC=LY coincidence interrupt
+            self.check_lyc_interrupt();
 
             // Reset window line counter at start of frame
             if self.scanline == 0 {
                 self.window_line_counter = 0;
             }
 
-            // sending a vblank interrupt
+            // VBlank interrupt at scanline 144
             if self.scanline == 144 {
                 let mut ram = self.ram.borrow_mut();
-                let curr_if = ram.read(0xFF0F);
+                let curr_if = ram.read_during_dma(0xFF0F);
                 ram.write(0xFF0F, curr_if | 0x01);
-            } else if self.scanline > 153 {
+            } 
+            // Wrap back to scanline 0 after line 153
+            else if self.scanline > 153 {
                 self.scanline = 0;
                 self.window_line_counter = 0;
-                self.scanline_cycle = 0;
+                self.ram.borrow_mut().write(0xFF44, 0);
+                self.check_lyc_interrupt();
             }
 
-            // implements non-static mode switching
-            let final_mode = if self.scanline >= 144 { 1 } else { 2 };
-
-            if final_mode != self.mode {
-                self.mode = final_mode;
+            // Update mode for the new scanline
+            let new_mode = if self.scanline >= 144 { 1 } else { 2 };
+            if new_mode != self.mode {
+                self.mode = new_mode;
                 self.on_mode_change();
             }
         }
     }
 
+    fn check_lyc_interrupt(&mut self) {
+        let mut ram = self.ram.borrow_mut();
+        let lyc = ram.read_during_dma(0xFF45);
+        let mut stat = ram.read_during_dma(0xFF41);
+        
+        // Update LYC=LY coincidence flag
+        if self.scanline == lyc {
+            stat |= 0x04; // Set coincidence flag
+            
+            // Trigger STAT interrupt if enabled (bit 6)
+            if stat & 0x40 != 0 {
+                let curr_if = ram.read_during_dma(0xFF0F);
+                ram.write(0xFF0F, curr_if | 0x02);
+            }
+        } else {
+            stat &= !0x04; // Clear coincidence flag
+        }
+        
+        ram.write(0xFF41, stat);
+    }
+
     fn on_mode_change(&mut self) {
         let mut ram = self.ram.borrow_mut();
 
-        // update stat mode bits 0-1
-        let mut stat = ram.read(0xFF41) & !0x03;
+        let mut stat = ram.read_during_dma(0xFF41) & !0x03;
         stat |= self.mode & 0x03;
         ram.write(0xFF41, stat);
 
-        // stat interrupts check bits 5,4,3 for modes 2,1,0 respectively
-        let stat = ram.read(0xFF41);
+        // stat interrupts check
+        let stat = ram.read_during_dma(0xFF41);
         let request_stat = match self.mode {
             2 => (stat & (1 << 5)) != 0, // OAM interrupt
             1 => (stat & (1 << 4)) != 0, // VBlank interrupt
@@ -174,13 +205,28 @@ impl PPU {
 
         // calls a stat interrupt
         if request_stat {
-            let curr_if = ram.read(0xFF0F);
+            let curr_if = ram.read_during_dma(0xFF0F);
             ram.write(0xFF0F, curr_if | 0x02);
+        }
+
+        if self.mode == 2
+        {
+            ram.oam_blocked = true;
+            ram.vram_blocked = false;
+        }
+        else if self.mode == 3
+        {
+            ram.oam_blocked = true;
+            ram.vram_blocked = true;
+        }
+        else {
+            ram.oam_blocked = false;
+            ram.vram_blocked = false;
         }
     }
 
     pub fn check_status(&mut self) {
-        let lcd_control = self.ram.borrow_mut().read(0xFF40);
+        let lcd_control = self.ram.borrow_mut().read_during_dma(0xFF40);
 
         // bit 7: lcd on or off indicator
         let new_lcd_on = lcd_control & 0x80 != 0;
@@ -191,6 +237,9 @@ impl PPU {
             self.mode = 0;
             self.window_line_counter = 0;
             self.ram.borrow_mut().write(0xFF44, 0);
+            
+            // Clear the framebuffer when LCD turns off
+            self.framebuffer = [255u8; 160 * 144 * 3]; 
         }
         self.lcd_on = new_lcd_on;
 
@@ -249,11 +298,10 @@ impl PPU {
         let mut tile = [0u8; 64];
 
         for y in 0..8u16 {
-            // compute address (safe cast)
             let addr1 = base_addr.wrapping_add(y.wrapping_mul(2));
             let addr2 = base_addr.wrapping_add(y.wrapping_mul(2).wrapping_add(1));
-            let byte1 = ram.read(addr1);
-            let byte2 = ram.read(addr2);
+            let byte1 = ram.read_during_dma(addr1);
+            let byte2 = ram.read_during_dma(addr2);
 
             for x in 0..8 {
                 let bit = 7 - x;
@@ -266,11 +314,12 @@ impl PPU {
 
         self.tile_cache[cache_index] = tile;
     }
+    
     fn get_tile_for_rendering(&self, tile_index: u8, use_signed_addressing: bool) -> &Tile {
         if use_signed_addressing {
             let signed_index = tile_index as i8;
             let base_index = (signed_index as i16 + 256) as usize;
-            &self.tile_cache[base_index] // direct mapping from -128..127 -> 128..383
+            &self.tile_cache[base_index]
         } else {
             &self.tile_cache[tile_index as usize]
         }
@@ -295,13 +344,13 @@ impl PPU {
         let mut ram = self.ram.borrow_mut();
         let y = self.scanline as u16;
 
-        let scy = ram.read(0xFF42) as u16;
-        let scx = ram.read(0xFF43) as u16;
-        let wy = ram.read(0xFF4A) as u16;
-        let wx_raw = ram.read(0xFF4B);
+        let scy = ram.read_during_dma(0xFF42) as u16;
+        let scx = ram.read_during_dma(0xFF43) as u16;
+        let wy = ram.read_during_dma(0xFF4A) as u16;
+        let wx_raw = ram.read_during_dma(0xFF4B);
         let wx = if wx_raw >= 7 { wx_raw - 7 } else { 0 } as u16;
 
-        let bg_palette = ram.read(0xFF47);
+        let bg_palette = ram.read_during_dma(0xFF47);
         let use_signed_addressing = self.background_and_window_tile_area == TILE_DATA_SIGNED;
 
         // Check if window should be rendered on this scanline
@@ -339,11 +388,12 @@ impl PPU {
 
             let mut ram = self.ram.borrow_mut();
             let tile_index_addr = tile_map_area + tile_y * 32 + tile_x;
-            let tile_index = ram.read(tile_index_addr);
+            let tile_index = ram.read_during_dma(tile_index_addr);
             drop(ram);
 
             let tile = self.get_tile_for_rendering(tile_index, use_signed_addressing);
             let color_index = tile[(pixel_y * 8 + pixel_x) as usize];
+            
             // store color index for priority checks
             let buf_idx = (y as usize * 160) + x as usize;
             self.bg_color_index_buffer[buf_idx] = color_index;
@@ -372,8 +422,8 @@ impl PPU {
         let mut ram = self.ram.borrow_mut();
         let base = 0xFE00;
         let sprite_height = if self.object_size { 16 } else { 8 };
-        let obj_palette0 = ram.read(0xFF48);
-        let obj_palette1 = ram.read(0xFF49);
+        let obj_palette0 = ram.read_during_dma(0xFF48);
+        let obj_palette1 = ram.read_during_dma(0xFF49);
         let current_scanline = self.scanline;
 
         // Collect sprites for current scanline
@@ -381,7 +431,7 @@ impl PPU {
 
         for i in 0..NUM_OBJECTS {
             let offset = base + i * 4;
-            let y_pos = ram.read(offset);
+            let y_pos = ram.read_during_dma(offset);
 
             // Skip sprite if Y position is invalid
             if y_pos == 0 || y_pos >= 160 {
@@ -403,10 +453,10 @@ impl PPU {
 
         for &sprite_index in &sprites_on_line {
             let offset = base + sprite_index * 4;
-            let y_pos = ram.read(offset);
-            let x_pos = ram.read(offset + 1);
-            let tile_index = ram.read(offset + 2);
-            let attributes = ram.read(offset + 3);
+            let y_pos = ram.read_during_dma(offset);
+            let x_pos = ram.read_during_dma(offset + 1);
+            let tile_index = ram.read_during_dma(offset + 2);
+            let attributes = ram.read_during_dma(offset + 3);
 
             let sprite_y = y_pos.wrapping_sub(16);
             let sprite_x = x_pos.wrapping_sub(8);
@@ -437,7 +487,6 @@ impl PPU {
 
             // Get the correct tile - sprites always use unsigned addressing
             let actual_tile_index = if sprite_height == 16 {
-                // For 8x16 sprites, ignore bit 0 of tile index and use consecutive tiles
                 let base_tile = (tile_index & 0xFE) as usize;
                 base_tile + (tile_row / 8) as usize
             } else {
@@ -474,11 +523,10 @@ impl PPU {
                     continue;
                 }
 
-                // Check priority - when priority bit is SET, sprite goes behind bg colors 1-3
+                // Check priority
                 let buf_idx = current_scanline as usize * 160 + screen_x as usize;
                 let bg_color_index = self.bg_color_index_buffer[buf_idx];
 
-                // If priority flag is set AND background is not color 0, skip this sprite pixel
                 if priority && bg_color_index != 0 {
                     continue;
                 }

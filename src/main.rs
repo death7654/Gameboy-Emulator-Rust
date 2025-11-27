@@ -1,37 +1,18 @@
 mod gameboy;
 
 use gameboy::EMULATOR;
-
 use sdl2::{event::Event, pixels::PixelFormatEnum};
 
-use crate::gameboy::cpu::CPU;
-
-// width of a gameboy screen
 const WIDTH: u32 = 160;
-
-// height of a gameboy screen
 const HEIGHT: u32 = 144;
 
-// gameboy clock speed in normal mode
+// Gameboy runs at ~4.194304 MHz, displaying ~59.7 fps
 const CPU_CLOCK: u64 = 4194304;
-const FRAMES: u64 = 60;
-
-/*
-Todo
-- implement
-    - MBC
-    - Audio
-    - OAM corruption bug
-    - color mode
-    - advance mode
-
- */
+const FRAMES_PER_SECOND: u64 = 60;
+const CYCLES_PER_FRAME: u64 = CPU_CLOCK / FRAMES_PER_SECOND; // ~69905 cycles per frame
 
 fn main() {
-    // read a rom file relative to the location of the root directory
-    let rom = std::fs::read("roms/tetris.gb").unwrap();
-
-    // create a new emulator object and load in rom, it must be mutable
+    let rom = std::fs::read("roms/pred.gb").unwrap();
     let mut emulator = EMULATOR::new(rom);
 
     let mut texture = emulator
@@ -67,19 +48,32 @@ fn main() {
             }
         }
 
-        const CYCLES_PER_FRAME: u64 = CPU_CLOCK / FRAMES; // 4194304 Hz / 59.7 fps
-        let target_cycles = emulator.cpu.cycles + CYCLES_PER_FRAME;
+        let start_cycles = emulator.cpu.cycles;
+        let target_cycles = start_cycles + CYCLES_PER_FRAME;
 
+        // Execute instructions until we've completed a frame's worth of cycles
         while emulator.cpu.cycles < target_cycles {
-            if emulator.cpu.halted {
-                emulator.cpu.nop(&mut emulator.ppu);
-            } else if !emulator.ram.borrow_mut().oam_dma {
-                let opcode = emulator.cpu.fetch();
-                emulator.cpu.execute(opcode, &mut emulator.ppu);
-            } else {
-                emulator.cpu.nop(&mut emulator.ppu);
+            // Handle OAM DMA transfer
+            if emulator.ram.borrow().oam_dma {
+                emulator.cpu.tick(&mut emulator.ppu);
+                continue;
             }
+
+            // Handle interrupts 
+            emulator.cpu.handle_interrupt(&mut emulator.ppu);
+
+            // If halted or stopped, just tick without executing
+            if emulator.cpu.halted || emulator.cpu.stopped {
+                emulator.cpu.tick(&mut emulator.ppu);
+                continue;
+            }
+
+            // Normal instruction execution
+            let opcode = emulator.cpu.fetch();
+            emulator.cpu.execute(opcode, &mut emulator.ppu);
         }
+
+        // Render the completed frame
         let framebuffer = emulator.ppu.get_framebuffer();
         texture.update(None, framebuffer, 160 * 3).unwrap();
         emulator.display.canvas.copy(&texture, None, None).unwrap();

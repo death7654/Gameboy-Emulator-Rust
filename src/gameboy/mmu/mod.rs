@@ -175,7 +175,7 @@ impl MMU {
 
     // functions that allows ram to be read and written to during OAM_DMA
     // mainly used to prevent CPU access
-    fn read_during_dma(&mut self, address: u16) -> u8 {
+    pub fn read_during_dma(&mut self, address: u16) -> u8 {
         match address {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.cartridge.read(address),
             0x8000..=0x9FFF => {

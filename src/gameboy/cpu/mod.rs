@@ -61,7 +61,7 @@ impl CPU {
 
     // used to handle system interrupts
     pub fn handle_interrupt(&mut self, ppu: &mut PPU) {
-        // Enable IME if queued (happens BEFORE interrupt check)
+        // Enable IME if queued
         if self.ime_queued {
             self.ime = true;
             self.ime_queued = false;
@@ -88,7 +88,6 @@ impl CPU {
 
         // if ime is disabled no interrupts will be serviced
         if self.ime {
-            // Service highest-priority pending interrupt
             for &(bit, vector) in &[
                 (0, 0x0040), // V-Blank
                 (1, 0x0048), // LCD STAT
@@ -108,12 +107,12 @@ impl CPU {
         self.halted = false;
         self.ime = false;
 
-        self.nop(ppu); // Internal delay (1 M-cycle)
+        self.nop(ppu); // Internal delay
 
-        // Push PC to stack (2 M-cycles)
+        // Push PC to stack
         self.push_pc(ppu);
 
-        self.nop(ppu); // Internal delay (1 M-cycle)
+        self.nop(ppu);
 
         // Clear interrupt flag
         let mut interrupt_flag = self.ram.borrow_mut().read(0xFF0F);
@@ -123,7 +122,7 @@ impl CPU {
         // Jump to interrupt vector
         self.registers.set_pc(vector);
 
-        self.nop(ppu); // Internal delay (1 M-cycle)
+        self.nop(ppu);
     }
 
     // the next opcode is retrieved but the cycles are not added
@@ -158,13 +157,6 @@ impl CPU {
 
         if self.ram.borrow_mut().oam_dma {
             self.ram.borrow_mut().oam_dma_transfer();
-            return;
-        }
-
-        self.handle_interrupt(ppu);
-
-        // Don't do anything else if halted/stopped
-        if self.halted || self.stopped {
             return;
         }
     }
