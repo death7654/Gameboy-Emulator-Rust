@@ -1,3 +1,5 @@
+use std::fs;
+
 // basic implementation for cartridge
 pub trait Cartridge {
     fn read(&self, address: u16) -> u8;
@@ -173,6 +175,8 @@ pub struct MBC3 {
     rtc: [u8; 5],
     rtc_latched: [u8; 5],
     latch_flag: bool,
+
+    is_dirty: bool,
 }
 
 impl MBC3 {
@@ -188,6 +192,7 @@ impl MBC3 {
             rtc: [0; 5],
             rtc_latched: [0; 5],
             latch_flag: false,
+            is_dirty: true,
         }
     }
 
@@ -224,12 +229,15 @@ impl MBC3 {
             let offset = bank_base + (addr as usize - 0xA000);
             self.eram.get(offset).copied().unwrap_or(0xFF)
         }
+
     }
 
     fn write_ram_or_rtc(&mut self, addr: u16, value: u8) {
         if !self.ram_enabled {
             return;
         }
+
+        self.is_dirty = true;
 
         if self.rtc_selected {
             self.rtc[(self.rtc_reg - 0x08) as usize] = value;
@@ -285,3 +293,9 @@ impl Cartridge for MBC3 {
         }
     }
 }
+
+
+
+
+
+

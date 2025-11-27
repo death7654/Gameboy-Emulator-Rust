@@ -12,8 +12,22 @@ const FRAMES_PER_SECOND: u64 = 60;
 const CYCLES_PER_FRAME: u64 = CPU_CLOCK / FRAMES_PER_SECOND; // ~69905 cycles per frame
 
 fn main() {
-    let rom = std::fs::read("roms/pred.gb").unwrap();
+    let path = "roms/pred.gb";
+    let rom = std::fs::read(path).unwrap();
+
     let mut emulator = EMULATOR::new(rom);
+    let mut file_name = "";
+
+    if emulator.battery
+    {
+        file_name = std::path::Path::new(path)
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap();
+
+        emulator.load_save(file_name);
+    }
 
     let mut texture = emulator
         .display
@@ -26,7 +40,14 @@ fn main() {
     'gameloop: loop {
         for evt in event_pump.poll_iter() {
             match evt {
-                Event::Quit { .. } => break 'gameloop,
+                Event::Quit { .. } => {
+                    if emulator.battery
+                    {
+                        let mut ram = emulator.ram.borrow_mut();
+                        ram.save(file_name);
+                    }
+                    break 'gameloop
+                },
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {

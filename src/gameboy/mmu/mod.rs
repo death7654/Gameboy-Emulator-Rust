@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fs;
 use std::rc::Rc;
 
 use crate::gameboy::cartridge::Cartridge;
@@ -7,7 +8,7 @@ use crate::gameboy::input;
 use input::Joypad;
 
 pub struct MMU {
-    cartridge: Box<dyn Cartridge>,
+    pub cartridge: Box<dyn Cartridge>,
     pub vram: [u8; 0x2000],
     pub wram: [u8; 0x2000],
     pub rom_bank: usize, // Active ROM Bank
@@ -73,6 +74,19 @@ impl MMU {
             oam_source: 0,
             joypad,
         }
+    }
+
+
+
+    pub fn save(&mut self, name: &str)
+    {
+        let file_name = name.to_owned() + ".sav";
+        let mut data: Vec<u8> = Vec::new();
+        for i in 0xA000..0xBFFF
+        {
+            data.push(self.read(i));
+        }
+        let _ = fs::write(file_name, data);
     }
 
     // to read the ram's contents
