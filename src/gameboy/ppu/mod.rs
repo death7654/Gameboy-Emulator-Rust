@@ -95,7 +95,7 @@ impl PPU {
 
         // Store previous state for mode change detection
         let previous_mode = self.mode;
-        
+
         // Increment cycle counter
         self.scanline_cycle += 4;
 
@@ -131,7 +131,7 @@ impl PPU {
             // Move to next scanline
             self.scanline_cycle -= SCANLINE_CYCLES;
             self.scanline = self.scanline.wrapping_add(1);
-            
+
             // Write scanline to LY register
             self.ram.borrow_mut().write(0xFF44, self.scanline);
 
@@ -148,7 +148,7 @@ impl PPU {
                 let mut ram = self.ram.borrow_mut();
                 let curr_if = ram.read_during_dma(0xFF0F);
                 ram.write(0xFF0F, curr_if | 0x01);
-            } 
+            }
             // Wrap back to scanline 0 after line 153
             else if self.scanline > 153 {
                 self.scanline = 0;
@@ -170,11 +170,11 @@ impl PPU {
         let mut ram = self.ram.borrow_mut();
         let lyc = ram.read_during_dma(0xFF45);
         let mut stat = ram.read_during_dma(0xFF41);
-        
+
         // Update LYC=LY coincidence flag
         if self.scanline == lyc {
             stat |= 0x04; // Set coincidence flag
-            
+
             // Trigger STAT interrupt if enabled (bit 6)
             if stat & 0x40 != 0 {
                 let curr_if = ram.read_during_dma(0xFF0F);
@@ -183,7 +183,7 @@ impl PPU {
         } else {
             stat &= !0x04; // Clear coincidence flag
         }
-        
+
         ram.write(0xFF41, stat);
     }
 
@@ -209,17 +209,13 @@ impl PPU {
             ram.write(0xFF0F, curr_if | 0x02);
         }
 
-        if self.mode == 2
-        {
+        if self.mode == 2 {
             ram.oam_blocked = true;
             ram.vram_blocked = false;
-        }
-        else if self.mode == 3
-        {
+        } else if self.mode == 3 {
             ram.oam_blocked = true;
             ram.vram_blocked = true;
-        }
-        else {
+        } else {
             ram.oam_blocked = false;
             ram.vram_blocked = false;
         }
@@ -237,9 +233,9 @@ impl PPU {
             self.mode = 0;
             self.window_line_counter = 0;
             self.ram.borrow_mut().write(0xFF44, 0);
-            
+
             // Clear the framebuffer when LCD turns off
-            self.framebuffer = [255u8; 160 * 144 * 3]; 
+            self.framebuffer = [255u8; 160 * 144 * 3];
         }
         self.lcd_on = new_lcd_on;
 
@@ -282,10 +278,12 @@ impl PPU {
     }
 
     fn generate_tiles(&mut self) {
+        // Generate all tiles from VRAM (0x8000-0x97FF = 384 tiles)
         for tile_index in 0..384 {
             let base_addr = 0x8000 + (tile_index as u16 * 16);
             self.generate_single_tile(base_addr, tile_index);
         }
+
         self.ram.borrow_mut().vram_changed = false;
     }
 
@@ -314,7 +312,7 @@ impl PPU {
 
         self.tile_cache[cache_index] = tile;
     }
-    
+
     fn get_tile_for_rendering(&self, tile_index: u8, use_signed_addressing: bool) -> &Tile {
         if use_signed_addressing {
             let signed_index = tile_index as i8;
@@ -393,7 +391,7 @@ impl PPU {
 
             let tile = self.get_tile_for_rendering(tile_index, use_signed_addressing);
             let color_index = tile[(pixel_y * 8 + pixel_x) as usize];
-            
+
             // store color index for priority checks
             let buf_idx = (y as usize * 160) + x as usize;
             self.bg_color_index_buffer[buf_idx] = color_index;
@@ -427,13 +425,12 @@ impl PPU {
         let current_scanline = self.scanline;
 
         // Collect sprites for current scanline
-        let mut sprites_on_line = Vec::new();
+        let mut sprites_on_line: Vec<(u16, u8)> = Vec::new();
 
         for i in 0..NUM_OBJECTS {
             let offset = base + i * 4;
             let y_pos = ram.read_during_dma(offset);
 
-            // Skip sprite if Y position is invalid
             if y_pos == 0 || y_pos >= 160 {
                 continue;
             }
@@ -442,16 +439,21 @@ impl PPU {
             let sprite_bottom = sprite_top.wrapping_add(sprite_height as u8);
 
             if current_scanline >= sprite_top && current_scanline < sprite_bottom {
-                sprites_on_line.push(i);
+                let x_pos = ram.read_during_dma(offset + 1);
+                sprites_on_line.push((i, x_pos));
 
-                // Game Boy only renders 10 sprites per scanline
+                // Only 10 sprites per scanline
                 if sprites_on_line.len() >= 10 {
                     break;
                 }
             }
         }
 
-        for &sprite_index in &sprites_on_line {
+        // Stable sort by X position
+        sprites_on_line.sort_by_key(|&(_, x)| x);
+
+        // Render in REVERSE so lower X-coordinate sprites draw last
+        for &(sprite_index, _) in sprites_on_line.iter().rev() {
             let offset = base + sprite_index * 4;
             let y_pos = ram.read_during_dma(offset);
             let x_pos = ram.read_during_dma(offset + 1);
@@ -461,7 +463,6 @@ impl PPU {
             let sprite_y = y_pos.wrapping_sub(16);
             let sprite_x = x_pos.wrapping_sub(8);
 
-            // Skip sprites that are completely off screen
             if x_pos == 0 || x_pos >= 168 {
                 continue;
             }
@@ -469,7 +470,7 @@ impl PPU {
             let y_flip = attributes & 0x40 != 0;
             let x_flip = attributes & 0x20 != 0;
             let use_palette1 = attributes & 0x10 != 0;
-            let priority = attributes & 0x80 != 0;
+            let behind_bg = attributes & 0x80 != 0;
 
             let palette = if use_palette1 {
                 obj_palette1
@@ -477,7 +478,6 @@ impl PPU {
                 obj_palette0
             };
 
-            // Calculate which row of the sprite we're rendering
             let sprite_row = current_scanline.wrapping_sub(sprite_y);
             let tile_row = if y_flip {
                 (sprite_height as u8 - 1).wrapping_sub(sprite_row)
@@ -485,7 +485,6 @@ impl PPU {
                 sprite_row
             };
 
-            // Get the correct tile - sprites always use unsigned addressing
             let actual_tile_index = if sprite_height == 16 {
                 let base_tile = (tile_index & 0xFE) as usize;
                 base_tile + (tile_row / 8) as usize
@@ -493,19 +492,16 @@ impl PPU {
                 tile_index as usize
             };
 
-            // Sprites always use the unsigned tile cache
-            if actual_tile_index >= 256 {
+            if actual_tile_index >= 384 {
                 continue;
             }
 
             let tile = &self.tile_cache[actual_tile_index];
             let tile_y = tile_row % 8;
 
-            // Render the sprite pixels
             for tile_x in 0..8 {
                 let screen_x = sprite_x.wrapping_add(tile_x);
 
-                // Skip if pixel is off screen
                 if screen_x >= 160 {
                     continue;
                 }
@@ -513,7 +509,7 @@ impl PPU {
                 let col = if x_flip { 7 - tile_x } else { tile_x };
                 let color_index = tile[(tile_y * 8 + col) as usize];
 
-                // Skip transparent pixels (color 0)
+                // Color 0 is transparent
                 if color_index == 0 {
                     continue;
                 }
@@ -523,15 +519,22 @@ impl PPU {
                     continue;
                 }
 
-                // Check priority
+                // Check OBJ-to-BG priority
                 let buf_idx = current_scanline as usize * 160 + screen_x as usize;
-                let bg_color_index = self.bg_color_index_buffer[buf_idx];
-
-                if priority && bg_color_index != 0 {
+                if buf_idx >= self.bg_color_index_buffer.len() {
                     continue;
                 }
 
-                // Map sprite color using the sprite's palette
+                // Only check priority if BG/Window is enabled
+                if self.background_and_window_enable_priority {
+                    let bg_color_index = self.bg_color_index_buffer[buf_idx];
+
+                    // If behind_bg flag set, sprite appears behind BG colors 1-3
+                    if behind_bg && bg_color_index != 0 {
+                        continue;
+                    }
+                }
+
                 let color = self.map_color_index(color_index, palette);
                 self.framebuffer[fb_index] = color[0];
                 self.framebuffer[fb_index + 1] = color[1];
@@ -539,7 +542,6 @@ impl PPU {
             }
         }
     }
-
     pub fn get_framebuffer(&self) -> &[u8] {
         &self.framebuffer
     }

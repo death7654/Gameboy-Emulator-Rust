@@ -229,7 +229,6 @@ impl MBC3 {
             let offset = bank_base + (addr as usize - 0xA000);
             self.eram.get(offset).copied().unwrap_or(0xFF)
         }
-
     }
 
     fn write_ram_or_rtc(&mut self, addr: u16, value: u8) {
@@ -293,9 +292,3 @@ impl Cartridge for MBC3 {
         }
     }
 }
-
-
-
-
-
-

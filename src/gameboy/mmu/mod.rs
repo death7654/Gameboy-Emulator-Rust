@@ -76,14 +76,10 @@ impl MMU {
         }
     }
 
-
-
-    pub fn save(&mut self, name: &str)
-    {
+    pub fn save(&mut self, name: &str) {
         let file_name = name.to_owned() + ".sav";
         let mut data: Vec<u8> = Vec::new();
-        for i in 0xA000..0xBFFF
-        {
+        for i in 0xA000..0xBFFF {
             data.push(self.read(i));
         }
         let _ = fs::write(file_name, data);

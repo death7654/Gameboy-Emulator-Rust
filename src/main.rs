@@ -17,16 +17,14 @@ fn main() {
 
     let mut emulator = EMULATOR::new(rom);
     let mut file_name = "";
-
-    if emulator.battery
-    {
+    if emulator.battery {
         file_name = std::path::Path::new(path)
-        .file_stem()
-        .unwrap()
-        .to_str()
-        .unwrap();
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap();
 
-        emulator.load_save(file_name);
+        let _ = emulator.load_save(file_name);
     }
 
     let mut texture = emulator
@@ -41,13 +39,12 @@ fn main() {
         for evt in event_pump.poll_iter() {
             match evt {
                 Event::Quit { .. } => {
-                    if emulator.battery
-                    {
+                    if emulator.battery {
                         let mut ram = emulator.ram.borrow_mut();
                         ram.save(file_name);
                     }
-                    break 'gameloop
-                },
+                    break 'gameloop;
+                }
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {
@@ -80,7 +77,7 @@ fn main() {
                 continue;
             }
 
-            // Handle interrupts 
+            // Handle interrupts
             emulator.cpu.handle_interrupt(&mut emulator.ppu);
 
             // If halted or stopped, just tick without executing
